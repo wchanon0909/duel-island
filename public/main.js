@@ -22,6 +22,18 @@ const HATS = [
 ];
 let selfHat = 'none';
 
+// ---------- Back decorations ----------
+const BACKS = [
+  { id: 'none', emoji: '🚫' },
+  { id: 'devilwing', emoji: '😈' },
+  { id: 'chickenwing', emoji: '🍗' },
+  { id: 'angelwing', emoji: '👼' },
+  { id: 'jetpack', emoji: '🚀' },
+  { id: 'cape', emoji: '🦸' },
+  { id: 'balloon', emoji: '🎈' }
+];
+let selfBack = 'none';
+
 // mirrors server.js timing constants for the sequential fire animation
 const SHOT_START_DELAY = 1800;
 const SHOT_INTERVAL = 1300;
@@ -40,6 +52,19 @@ HATS.forEach(h => {
 });
 function updateHatPickerUI() {
   [...hatPickerEl.children].forEach((btn, i) => btn.classList.toggle('active', HATS[i].id === selfHat));
+}
+
+const backPickerEl = $('backPicker');
+BACKS.forEach(b => {
+  const btn = document.createElement('button');
+  btn.className = 'hatBtn';
+  btn.textContent = b.emoji;
+  btn.title = b.id;
+  btn.addEventListener('click', () => socket.emit('setBack', { back: b.id }));
+  backPickerEl.appendChild(btn);
+});
+function updateBackPickerUI() {
+  [...backPickerEl.children].forEach((btn, i) => btn.classList.toggle('active', BACKS[i].id === selfBack));
 }
 
 const homeScreen = $('homeScreen');
@@ -92,12 +117,16 @@ socket.on('roomUpdate', data => {
     const list = $('lobbyPlayers');
     list.innerHTML = '';
     data.players.forEach(p => {
-      if (p.id === selfId) { selfHat = p.hat || 'none'; updateHatPickerUI(); }
+      if (p.id === selfId) {
+        selfHat = p.hat || 'none'; updateHatPickerUI();
+        selfBack = p.back || 'none'; updateBackPickerUI();
+      }
       const hatEmoji = (HATS.find(h => h.id === p.hat) || HATS[0]).emoji;
+      const backEmoji = (BACKS.find(b => b.id === p.back) || BACKS[0]).emoji;
       const li = document.createElement('li');
       const label = document.createElement('span');
       label.innerHTML = `<span class="dot" style="background:${p.color}"></span>
-        <span>${p.isBot ? '🤖 ' : ''}${p.hat && p.hat !== 'none' ? hatEmoji + ' ' : ''}${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
+        <span>${p.isBot ? '🤖 ' : ''}${p.hat && p.hat !== 'none' ? hatEmoji + ' ' : ''}${p.back && p.back !== 'none' ? backEmoji + ' ' : ''}${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
       label.style.display = 'flex';
       label.style.alignItems = 'center';
       label.style.gap = '10px';
@@ -301,7 +330,94 @@ function addHatDecoration(group, hat) {
   }
 }
 
-function makePlayerMesh(color, isSelf, hat) {
+function addBackDecoration(group, back) {
+  const midY = 0.55; // roughly shoulder height on the body
+  const backZ = -0.22; // just behind the body
+  switch (back) {
+    case 'devilwing': {
+      const mat = new THREE.MeshStandardMaterial({ color: 0x8b1a1a, roughness: 0.6, side: THREE.DoubleSide });
+      const makeWing = sign => {
+        const wing = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 4, 1, true), mat);
+        wing.scale.set(1, 0.5, 0.35);
+        wing.rotation.z = sign * Math.PI / 2.1;
+        wing.rotation.y = sign * 0.5;
+        wing.position.set(sign * 0.32, midY, backZ);
+        return wing;
+      };
+      group.add(makeWing(-1), makeWing(1));
+      break;
+    }
+    case 'chickenwing': {
+      const mat = new THREE.MeshStandardMaterial({ color: 0xf4c968, roughness: 0.8 });
+      const makeWing = sign => {
+        const wing = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), mat);
+        wing.scale.set(0.55, 1, 0.4);
+        wing.rotation.z = sign * 0.5;
+        wing.position.set(sign * 0.28, midY - 0.05, backZ + 0.02);
+        return wing;
+      };
+      group.add(makeWing(-1), makeWing(1));
+      break;
+    }
+    case 'angelwing': {
+      const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, side: THREE.DoubleSide });
+      const makeWing = sign => {
+        const wing = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.55, 4, 1, true), mat);
+        wing.scale.set(1, 0.55, 0.3);
+        wing.rotation.z = sign * Math.PI / 2.1;
+        wing.rotation.y = sign * 0.4;
+        wing.position.set(sign * 0.33, midY + 0.05, backZ);
+        return wing;
+      };
+      group.add(makeWing(-1), makeWing(1));
+      break;
+    }
+    case 'jetpack': {
+      const bodyMat2 = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.3, roughness: 0.5 });
+      const pack = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.4, 0.16), bodyMat2);
+      pack.position.set(0, midY, backZ - 0.02);
+      const flameMat = new THREE.MeshStandardMaterial({ color: 0xff8c1a, emissive: 0xff5500, emissiveIntensity: 0.8 });
+      const makeThruster = sign => {
+        const t = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.18, 8), bodyMat2);
+        t.position.set(sign * 0.1, midY - 0.28, backZ - 0.02);
+        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 8), flameMat);
+        flame.position.set(sign * 0.1, midY - 0.42, backZ - 0.02);
+        flame.rotation.x = Math.PI;
+        group.add(t, flame);
+      };
+      group.add(pack);
+      makeThruster(-1);
+      makeThruster(1);
+      break;
+    }
+    case 'cape': {
+      const mat = new THREE.MeshStandardMaterial({ color: 0xd7263d, roughness: 0.7, side: THREE.DoubleSide });
+      const cape = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.03), mat);
+      cape.position.set(0, midY - 0.1, backZ);
+      cape.rotation.x = 0.15;
+      group.add(cape);
+      break;
+    }
+    case 'balloon': {
+      const colors = [0xff5fa2, 0xffe066, 0x6ec4ff];
+      colors.forEach((c, i) => {
+        const balloon = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 10), new THREE.MeshStandardMaterial({ color: c }));
+        const ox = (i - 1) * 0.14;
+        balloon.position.set(ox, midY + 0.55, backZ);
+        const stringMat = new THREE.MeshBasicMaterial({ color: 0x999999 });
+        const string = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.4, 4), stringMat);
+        string.position.set(ox * 0.3, midY + 0.3, backZ);
+        string.rotation.z = ox * -0.6;
+        group.add(balloon, string);
+      });
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+function makePlayerMesh(color, isSelf, hat, back) {
   const group = new THREE.Group();
   const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.85, 0.4), bodyMat);
@@ -312,6 +428,7 @@ function makePlayerMesh(color, isSelf, hat) {
   head.castShadow = true;
   group.add(body, head);
   addHatDecoration(group, hat);
+  addBackDecoration(group, back);
 
   // gun / aim nub on front
   const nub = new THREE.Mesh(
@@ -581,7 +698,7 @@ socket.on('roundStart', data => {
 
   if (selfMesh) scene.remove(selfMesh);
   if (selfLaser) scene.remove(selfLaser);
-  selfMesh = makePlayerMesh(selfColor, true, selfHat);
+  selfMesh = makePlayerMesh(selfColor, true, selfHat, selfBack);
   scene.add(selfMesh);
   selfLaser = makeLaser(selfColor);
   selfLaser.material.opacity = 0.5;
@@ -686,7 +803,7 @@ socket.on('roundResult', data => {
   clearRevealMeshes();
 
   data.players.forEach(p => {
-    const mesh = makePlayerMesh(p.color, p.id === selfId, p.hat);
+    const mesh = makePlayerMesh(p.color, p.id === selfId, p.hat, p.back);
     mesh.position.set(p.x, 0, p.z);
     mesh.rotation.y = p.angle;
     scene.add(mesh);

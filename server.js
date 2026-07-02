@@ -16,6 +16,7 @@ const MIN_ISLAND_SIZE = 6;
 const SHRINK_FACTOR = 0.8;
 
 const HAT_IDS = ['none', 'party', 'tophat', 'halo', 'horns', 'bunny', 'crown', 'propeller', 'chef'];
+const BACK_IDS = ['none', 'devilwing', 'chickenwing', 'angelwing', 'jetpack', 'cape', 'balloon'];
 
 // sequential fire animation timing (mirrored client-side in main.js)
 const SHOT_START_DELAY = 1800; // pause to pan the camera out before the first shot
@@ -75,7 +76,7 @@ class Room {
 
   publicPlayers() {
     return [...this.players.values()].map(p => ({
-      id: p.id, name: p.name, color: p.color, alive: p.alive, isBot: !!p.isBot, hat: p.hat
+      id: p.id, name: p.name, color: p.color, alive: p.alive, isBot: !!p.isBot, hat: p.hat, back: p.back
     }));
   }
 
@@ -93,7 +94,8 @@ class Room {
     this.players.set(id, {
       id, name, color, x: 0, z: 0, angle: 0,
       alive: true, ready: false, isBot: true,
-      hat: HAT_IDS[1 + Math.floor(Math.random() * (HAT_IDS.length - 1))]
+      hat: HAT_IDS[1 + Math.floor(Math.random() * (HAT_IDS.length - 1))],
+      back: BACK_IDS[1 + Math.floor(Math.random() * (BACK_IDS.length - 1))]
     });
   }
 
@@ -256,7 +258,7 @@ class Room {
       players: [...this.players.values()]
         .filter(p => alive.includes(p) || eliminated.includes(p.id))
         .map(p => ({
-          id: p.id, name: p.name, color: p.color, hat: p.hat,
+          id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back,
           x: p.x, z: p.z, angle: p.angle,
           alive: p.alive,
           wasHit: eliminated.includes(p.id)
@@ -330,7 +332,8 @@ io.on('connection', socket => {
       x: 0, z: 0, angle: 0,
       alive: true,
       ready: false,
-      hat: 'none'
+      hat: 'none',
+      back: 'none'
     });
     socket.emit('joined', { code: room.code, selfId: socket.id });
     room.broadcastRoom();
@@ -357,6 +360,15 @@ io.on('connection', socket => {
     const p = room.players.get(socket.id);
     if (!p || !HAT_IDS.includes(hat)) return;
     p.hat = hat;
+    room.broadcastRoom();
+  });
+
+  socket.on('setBack', ({ back }) => {
+    const room = rooms.get(currentRoomCode);
+    if (!room || room.state !== 'lobby') return;
+    const p = room.players.get(socket.id);
+    if (!p || !BACK_IDS.includes(back)) return;
+    p.back = back;
     room.broadcastRoom();
   });
 
