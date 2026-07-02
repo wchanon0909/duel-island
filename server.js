@@ -7,11 +7,13 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: res => res.setHeader('Cache-Control', 'no-cache')
+}));
 
 const PLACE_DURATION = 20000; // ms to walk & aim each round
 const NEXT_ROUND_DELAY = 4000; // pause after reveal before next round starts
-const HIT_WIDTH = 0.6; // perpendicular tolerance of the laser "beam"
+const HIT_WIDTH = 0.3; // perpendicular tolerance of the laser "beam"
 const MIN_ISLAND_SIZE = 6;
 const SHRINK_FACTOR = 0.8;
 
@@ -72,6 +74,17 @@ class Room {
     this.timer = null;
     this.roundEndsAt = 0;
     this.botCounter = 0;
+    this.spectatorRoom = `${code}::spectators`;
+  }
+
+  joinSpectators(id) {
+    const sock = io.sockets.sockets.get(id);
+    if (sock) sock.join(this.spectatorRoom);
+  }
+
+  leaveSpectators(id) {
+    const sock = io.sockets.sockets.get(id);
+    if (sock) sock.leave(this.spectatorRoom);
   }
 
   publicPlayers() {
@@ -151,7 +164,10 @@ class Room {
   startGame() {
     if (this.players.size < 2) return;
     this.round = 0;
-    for (const p of this.players.values()) p.alive = true;
+    for (const p of this.players.values()) {
+      p.alive = true;
+      this.leaveSpectators(p.id);
+    }
     this.islandSize = computeIslandSize(this.players.size);
     this.startRound();
   }
@@ -183,6 +199,13 @@ class Room {
       endsAt: this.roundEndsAt,
       bounds: half
     });
+    io.to(this.spectatorRoom).emit('spectateSnapshot', {
+      round: this.round,
+      players: [...this.players.values()].filter(p => p.alive).map(p => ({
+        id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back,
+        x: p.x, z: p.z, angle: p.angle
+      }))
+    });
     this.broadcastReady();
     clearTimeout(this.timer);
     const alive = [...this.players.values()].filter(p => p.alive);
@@ -195,11 +218,12 @@ class Room {
 
   handleMove(id, x, z, angle) {
     const p = this.players.get(id);
-    if (!p || !p.alive || this.state !== 'placing') return;
+    if (!p || !p.alive || this.state !== 'placing' || p.ready) return;
     const half = this.islandSize / 2 - 0.6;
     p.x = Math.max(-half, Math.min(half, x));
     p.z = Math.max(-half, Math.min(half, z));
     p.angle = angle;
+    io.to(this.spectatorRoom).emit('spectateMove', { id: p.id, x: p.x, z: p.z, angle: p.angle });
   }
 
   resolveRound() {
@@ -249,6 +273,7 @@ class Room {
       if (!stillAlive.has(p.id)) {
         p.alive = false;
         eliminated.push(p.id);
+        if (!p.isBot) this.joinSpectators(p.id);
       }
     }
 
@@ -293,7 +318,10 @@ class Room {
     clearTimeout(this.timer);
     this.state = 'lobby';
     this.round = 0;
-    for (const p of this.players.values()) p.alive = true;
+    for (const p of this.players.values()) {
+      p.alive = true;
+      this.leaveSpectators(p.id);
+    }
     this.broadcastRoom();
   }
 }

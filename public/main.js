@@ -120,6 +120,7 @@ socket.on('roomUpdate', data => {
       if (p.id === selfId) {
         selfHat = p.hat || 'none'; updateHatPickerUI();
         selfBack = p.back || 'none'; updateBackPickerUI();
+        selfAlive = true;
       }
       const hatEmoji = (HATS.find(h => h.id === p.hat) || HATS[0]).emoji;
       const backEmoji = (BACKS.find(b => b.id === p.back) || BACKS[0]).emoji;
@@ -632,6 +633,54 @@ let mouseNdc = new THREE.Vector2(0, 0);
 const raycaster = new THREE.Raycaster();
 const keys = { w: false, a: false, s: false, d: false };
 
+// ---------- Spectator state (dead players watch the rest of the match) ----------
+let selfAlive = true;
+let spectating = false;
+let spectatorMeshes = new Map(); // id -> { mesh, x, z, angle, targetX, targetZ, targetAngle }
+const spectateCamTarget = new THREE.Vector3(0, 14, 10);
+
+function clearSpectatorMeshes() {
+  spectatorMeshes.forEach(s => scene.remove(s.mesh));
+  spectatorMeshes.clear();
+}
+
+socket.on('spectateSnapshot', data => {
+  clearSpectatorMeshes();
+  data.players.forEach(p => {
+    if (p.id === selfId) return;
+    const mesh = makePlayerMesh(p.color, false, p.hat, p.back);
+    mesh.position.set(p.x, 0, p.z);
+    mesh.rotation.y = p.angle;
+    scene.add(mesh);
+    spectatorMeshes.set(p.id, { mesh, x: p.x, z: p.z, angle: p.angle, targetX: p.x, targetZ: p.z, targetAngle: p.angle });
+  });
+});
+
+socket.on('spectateMove', ({ id, x, z, angle }) => {
+  const s = spectatorMeshes.get(id);
+  if (s) { s.targetX = x; s.targetZ = z; s.targetAngle = angle; }
+});
+
+function updateSpectate(dt) {
+  if (!spectating) return;
+  spectatorMeshes.forEach(s => {
+    s.x = THREE.MathUtils.lerp(s.x, s.targetX, Math.min(1, dt * 8));
+    s.z = THREE.MathUtils.lerp(s.z, s.targetZ, Math.min(1, dt * 8));
+    s.angle = THREE.MathUtils.lerp(s.angle, s.targetAngle, Math.min(1, dt * 8));
+    s.mesh.position.set(s.x, 0, s.z);
+    s.mesh.rotation.y = s.angle;
+  });
+
+  camera.position.lerp(spectateCamTarget, 0.04);
+  camera.lookAt(0, 0, 0);
+
+  const remain = Math.max(0, roundEndsAt - Date.now());
+  const secs = Math.ceil(remain / 1000);
+  const tEl = $('timerValue');
+  tEl.textContent = secs;
+  tEl.classList.toggle('warn', secs <= 6);
+}
+
 window.addEventListener('keydown', e => setKey(e.key, true));
 window.addEventListener('keyup', e => setKey(e.key, false));
 function setKey(k, val) {
@@ -646,7 +695,7 @@ let selfReady = false;
 let readyCount = 0;
 let readyTotal = 0;
 window.addEventListener('keydown', e => {
-  if ((e.code === 'Space' || e.key === ' ') && placing) {
+  if ((e.code === 'Space' || e.key === ' ') && placing && !spectating) {
     e.preventDefault();
     if (!selfReady) {
       selfReady = true;
@@ -663,7 +712,7 @@ socket.on('readyUpdate', ({ ready, total }) => {
 });
 
 function updateReadyUI() {
-  if (!placing) return;
+  if (!placing || spectating) return;
   const inst = $('instructions');
   if (selfReady) {
     inst.textContent = `✅ พร้อมแล้ว! รอเพื่อน... (${readyCount}/${readyTotal})`;
@@ -691,19 +740,12 @@ socket.on('roundStart', data => {
 
   // clear previous reveal meshes
   clearRevealMeshes();
+  clearSpectatorMeshes();
 
-  // find own color from last roomUpdate players list (fallback)
-  selfPos.set((Math.random() - 0.5) * 1, 0, (Math.random() - 0.5) * 1);
-  selfAngle = Math.random() * Math.PI * 2;
+  if (selfMesh) { scene.remove(selfMesh); selfMesh = null; }
+  if (selfLaser) { scene.remove(selfLaser); selfLaser = null; }
 
-  if (selfMesh) scene.remove(selfMesh);
-  if (selfLaser) scene.remove(selfLaser);
-  selfMesh = makePlayerMesh(selfColor, true, selfHat, selfBack);
-  scene.add(selfMesh);
-  selfLaser = makeLaser(selfColor);
-  selfLaser.material.opacity = 0.5;
-  scene.add(selfLaser);
-
+  spectating = !selfAlive;
   placing = true;
   selfReady = false;
   readyCount = 0;
@@ -711,8 +753,24 @@ socket.on('roundStart', data => {
   showScreen('game');
   $('banner').classList.add('hidden');
   $('eliminatedList').classList.add('hidden');
+  $('orderPanel').classList.add('hidden');
   roundEndsAt = data.endsAt;
-  updateReadyUI();
+
+  if (spectating) {
+    spectateCamTarget.set(0, data.islandSize * 0.85 + 6, data.islandSize * 0.6 + 4);
+    $('instructions').textContent = '👻 คุณตกรอบแล้ว กำลังดูผู้เล่นที่เหลือหาที่กำบัง...';
+  } else {
+    // find own color from last roomUpdate players list (fallback)
+    selfPos.set((Math.random() - 0.5) * 1, 0, (Math.random() - 0.5) * 1);
+    selfAngle = Math.random() * Math.PI * 2;
+
+    selfMesh = makePlayerMesh(selfColor, true, selfHat, selfBack);
+    scene.add(selfMesh);
+    selfLaser = makeLaser(selfColor);
+    selfLaser.material.opacity = 0.5;
+    scene.add(selfLaser);
+    updateReadyUI();
+  }
 });
 
 // track color for self via roomUpdate
@@ -727,27 +785,35 @@ let lastSent = 0;
 
 function updatePlacement(dt) {
   if (!placing || !selfMesh) return;
-  const speed = 4.2;
-  let mx = 0, mz = 0;
-  if (keys.w) mz -= 1;
-  if (keys.s) mz += 1;
-  if (keys.a) mx -= 1;
-  if (keys.d) mx += 1;
-  if (mx || mz) {
-    const len = Math.hypot(mx, mz);
-    selfPos.x += (mx / len) * speed * dt;
-    selfPos.z += (mz / len) * speed * dt;
-    selfPos.x = Math.max(-bounds, Math.min(bounds, selfPos.x));
-    selfPos.z = Math.max(-bounds, Math.min(bounds, selfPos.z));
-  }
+  if (!selfReady) {
+    const speed = 4.2;
+    let mx = 0, mz = 0;
+    if (keys.w) mz -= 1;
+    if (keys.s) mz += 1;
+    if (keys.a) mx -= 1;
+    if (keys.d) mx += 1;
+    if (mx || mz) {
+      const len = Math.hypot(mx, mz);
+      selfPos.x += (mx / len) * speed * dt;
+      selfPos.z += (mz / len) * speed * dt;
+      selfPos.x = Math.max(-bounds, Math.min(bounds, selfPos.x));
+      selfPos.z = Math.max(-bounds, Math.min(bounds, selfPos.z));
+    }
 
-  // aim via mouse -> ground plane
-  raycaster.setFromCamera(mouseNdc, camera);
-  const hit = new THREE.Vector3();
-  if (raycaster.ray.intersectPlane(groundPlane, hit)) {
-    const dx = hit.x - selfPos.x;
-    const dz = hit.z - selfPos.z;
-    if (Math.hypot(dx, dz) > 0.05) selfAngle = Math.atan2(dx, dz);
+    // aim via mouse -> ground plane
+    raycaster.setFromCamera(mouseNdc, camera);
+    const hit = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(groundPlane, hit)) {
+      const dx = hit.x - selfPos.x;
+      const dz = hit.z - selfPos.z;
+      if (Math.hypot(dx, dz) > 0.05) selfAngle = Math.atan2(dx, dz);
+    }
+
+    const now = performance.now();
+    if (now - lastSent > 80) {
+      lastSent = now;
+      socket.emit('move', { x: selfPos.x, z: selfPos.z, angle: selfAngle });
+    }
   }
 
   selfMesh.position.set(selfPos.x, 0, selfPos.z);
@@ -760,12 +826,6 @@ function updatePlacement(dt) {
   const camOffset = new THREE.Vector3(0, 11, 7);
   camera.position.set(selfPos.x + camOffset.x, camOffset.y, selfPos.z + camOffset.z);
   camera.lookAt(selfPos.x, 0.4, selfPos.z);
-
-  const now = performance.now();
-  if (now - lastSent > 80) {
-    lastSent = now;
-    socket.emit('move', { x: selfPos.x, z: selfPos.z, angle: selfAngle });
-  }
 
   const remain = Math.max(0, roundEndsAt - Date.now());
   const secs = Math.ceil(remain / 1000);
@@ -796,11 +856,59 @@ function clearRevealMeshes() {
   revealActive = false;
 }
 
+// ---------- Firing order table ----------
+let orderRowMap = new Map();
+
+function buildOrderTable(data) {
+  const listEl = $('orderList');
+  listEl.innerHTML = '';
+  orderRowMap.clear();
+  data.shots.forEach(s => {
+    const shooter = data.players.find(p => p.id === s.shooterId);
+    if (!shooter) return;
+    const li = document.createElement('li');
+    li.className = 'orderRow';
+    li.innerHTML = `<span class="orderRank">🎲</span>
+      <span class="orderDot" style="background:${shooter.color}"></span>
+      <span class="orderName">${escapeHtml(shooter.name)}</span>
+      <span class="orderResult"></span>`;
+    listEl.appendChild(li);
+    orderRowMap.set(s.shooterId, {
+      li, rankEl: li.querySelector('.orderRank'), resultEl: li.querySelector('.orderResult')
+    });
+  });
+  $('orderPanel').classList.remove('hidden');
+}
+
+function revealOrderRow(rank, shot) {
+  const row = orderRowMap.get(shot.shooterId);
+  if (!row) return;
+  row.li.classList.add('active');
+  let ticks = 0;
+  const maxTicks = 8;
+  const iv = setInterval(() => {
+    ticks++;
+    if (ticks < maxTicks) {
+      row.rankEl.textContent = String(1 + Math.floor(Math.random() * orderRowMap.size));
+    } else {
+      clearInterval(iv);
+      row.rankEl.textContent = rank;
+      row.li.classList.remove('active');
+      row.li.classList.add('done');
+      row.resultEl.textContent = shot.skipped ? '💀' : shot.hit ? '🎯' : '❌';
+    }
+  }, 60);
+}
+
 socket.on('roundResult', data => {
   placing = false;
+  spectating = false;
+  const me = data.players.find(p => p.id === selfId);
+  if (me) selfAlive = me.alive;
   if (selfMesh) { scene.remove(selfMesh); selfMesh = null; }
   if (selfLaser) { scene.remove(selfLaser); selfLaser = null; }
   clearRevealMeshes();
+  clearSpectatorMeshes();
 
   data.players.forEach(p => {
     const mesh = makePlayerMesh(p.color, p.id === selfId, p.hat, p.back);
@@ -825,6 +933,8 @@ socket.on('roundResult', data => {
       if (targetEntry) targetEntry.hitTime = s.fireTime + BULLET_TRAVEL_MS;
     }
   });
+
+  buildOrderTable(data);
 
   // camera pulls back to see whole island
   const size = data.islandSize;
@@ -865,9 +975,10 @@ function updateReveal(dt) {
   camera.position.lerp(overviewCamTarget, 0.04);
   camera.lookAt(0, 0, 0);
 
-  revealShots.forEach(s => {
+  revealShots.forEach((s, idx) => {
     if (s.triggered || revealClock < s.fireTime) return;
     s.triggered = true;
+    revealOrderRow(idx + 1, s);
     if (s.skipped) return; // this player was already down before their turn came up
     const shooterEntry = revealMeshMap.get(s.shooterId);
     if (!shooterEntry) return;
@@ -904,6 +1015,7 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(0.05, clock.getDelta());
   updatePlacement(dt);
+  updateSpectate(dt);
   updateReveal(dt);
   renderer.render(scene, camera);
 }
