@@ -175,28 +175,35 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
 #hud .aliveDead { text-decoration: line-through; color: #55607e; }
 
 #hud .orderPanel {
-  position: absolute; top: 92px; right: 18px; width: 220px;
-  background: rgba(255,255,255,0.92); border: 3px solid #fff; border-radius: 16px;
-  padding: 12px 14px; box-shadow: 0 10px 24px rgba(30,60,100,0.25);
-  max-height: 62vh; overflow-y: auto;
+  position: absolute; top: 92px; right: 18px; width: 330px;
+  background: rgba(255,255,255,0.92); border: 3px solid #fff; border-radius: 18px;
+  padding: 16px 18px; box-shadow: 0 10px 24px rgba(30,60,100,0.25);
+  max-height: 70vh; overflow-y: auto;
 }
 #hud .orderPanelTitle {
-  font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 15px;
-  color: #2f6fb0; text-align: center; margin-bottom: 8px;
+  font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 20px;
+  color: #2f6fb0; text-align: center; margin-bottom: 10px;
 }
 #orderList { list-style: none; margin: 0; padding: 0; }
 .orderRow {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 8px; border-radius: 10px; margin-bottom: 4px;
-  background: #f0f7fd; font-size: 13px; font-weight: 600; color: #3a4f6b;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 11px; border-radius: 12px; margin-bottom: 6px;
+  background: #f0f7fd; font-size: 16px; font-weight: 600; color: #3a4f6b;
   transition: background .2s ease, transform .2s ease;
 }
 .orderRow.active { background: #fff2c2; transform: scale(1.04); }
 .orderRow.done { opacity: 0.85; }
 .orderDot {
-  width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+  width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
   box-shadow: 0 0 0 2px rgba(255,255,255,0.7) inset;
 }
+.endGameBtn {
+  position: absolute; top: 92px; left: 18px; z-index: 5;
+  font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 14px;
+  color: #fff; background: #e05a6b; border: none; border-radius: 12px;
+  padding: 9px 14px; cursor: pointer; box-shadow: 0 5px 14px rgba(200,60,80,0.35);
+}
+.endGameBtn:hover { background: #d64960; }
 .orderName { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orderResult { flex-shrink: 0; }
 

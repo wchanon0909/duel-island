@@ -35,9 +35,9 @@ const BACKS = [
 let selfBack = 'none';
 
 // mirrors server.js timing constants for the sequential fire animation
-const SHOT_START_DELAY = 1800;
+const SHOT_START_DELAY = 4200;
 const SHOT_INTERVAL = 1300;
-const BULLET_TRAVEL_MS = 250;
+const BULLET_SPEED = 16; // units/sec — medium travel speed for the bullet ball
 
 const $ = id => document.getElementById(id);
 
@@ -96,6 +96,9 @@ $('btnJoin').addEventListener('click', () => {
 });
 $('btnStart').addEventListener('click', () => socket.emit('startGame'));
 $('btnPlayAgain').addEventListener('click', () => socket.emit('playAgain'));
+$('btnEndGame').addEventListener('click', () => {
+  if (confirm('จบเกมตอนนี้แล้วพาทุกคนกลับไปที่ล็อบบี้?')) socket.emit('endToLobby');
+});
 $('btnAddBot').addEventListener('click', () => socket.emit('addBot'));
 
 socket.on('errorMsg', ({ message }) => {
@@ -112,6 +115,9 @@ socket.on('roomUpdate', data => {
   roomCode = data.code;
   isHost = data.hostId === selfId;
   if (data.state === 'lobby') {
+    revealActive = false;
+    spectating = false;
+    $('btnEndGame').classList.add('hidden');
     showScreen('lobby');
     $('lobbyCode').textContent = data.code;
     const list = $('lobbyPlayers');
@@ -526,7 +532,7 @@ function getBloodTexture() {
   return bloodTextureCache;
 }
 
-let fxSprites = [], fxBeams = [], fxParticles = [], revealDecals = [];
+let fxSprites = [], fxBeams = [], fxParticles = [], revealDecals = [], fxBullets = [];
 
 function spawnMuzzleFlash(entry) {
   const dx = Math.sin(entry.angle), dz = Math.cos(entry.angle);
@@ -541,20 +547,26 @@ function spawnMuzzleFlash(entry) {
   fxSprites.push({ sprite, life: 0, duration: 0.18 });
 }
 
-function spawnBulletBeam(shooterEntry, endPos, color) {
+// a round bullet that flies from the shooter toward endPos at BULLET_SPEED
+function spawnBullet(shooterEntry, endPos, color) {
   const start = new THREE.Vector3(shooterEntry.x, 0.55, shooterEntry.z);
-  const dx = endPos.x - start.x, dz = endPos.z - start.z;
-  const dist = Math.max(0.1, Math.hypot(dx, dz));
-  const angle = Math.atan2(dx, dz);
-  const beam = makeLaser(color);
-  beam.material.transparent = true;
-  beam.material.opacity = 0.95;
-  beam.material.blending = THREE.AdditiveBlending;
-  beam.position.copy(start);
-  beam.rotation.y = angle;
-  beam.scale.z = dist;
-  scene.add(beam);
-  fxBeams.push({ mesh: beam, life: 0, duration: 0.45 });
+  const dist = Math.max(0.1, Math.hypot(endPos.x - start.x, endPos.z - start.z));
+  const duration = dist / BULLET_SPEED; // seconds
+  const geo = new THREE.SphereGeometry(0.12, 12, 12); // ~= the old laser beam thickness
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.98 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(start);
+  scene.add(mesh);
+  // faint glow sprite riding along with the ball
+  const glowMat = new THREE.SpriteMaterial({
+    map: getFlareTexture(), color, transparent: true, opacity: 0.7,
+    depthWrite: false, blending: THREE.AdditiveBlending
+  });
+  const glow = new THREE.Sprite(glowMat);
+  glow.scale.setScalar(0.5);
+  glow.position.copy(start);
+  scene.add(glow);
+  fxBullets.push({ mesh, glow, start, end: new THREE.Vector3(endPos.x, 0.55, endPos.z), life: 0, duration });
 }
 
 function makeBloodDecal() {
@@ -604,6 +616,17 @@ function updateFx(dt) {
     const t = b.life / b.duration;
     b.mesh.material.opacity = Math.max(0, 0.95 * (1 - t));
     if (t >= 1) { scene.remove(b.mesh); fxBeams.splice(i, 1); }
+  }
+  for (let i = fxBullets.length - 1; i >= 0; i--) {
+    const b = fxBullets[i];
+    b.life += dt;
+    const t = Math.min(1, b.life / b.duration);
+    b.mesh.position.lerpVectors(b.start, b.end, t);
+    b.glow.position.copy(b.mesh.position);
+    if (t >= 1) {
+      scene.remove(b.mesh); scene.remove(b.glow);
+      fxBullets.splice(i, 1);
+    }
   }
   for (let i = fxParticles.length - 1; i >= 0; i--) {
     const p = fxParticles[i];
@@ -751,6 +774,7 @@ socket.on('roundStart', data => {
   readyCount = 0;
   readyTotal = 0;
   showScreen('game');
+  $('btnEndGame').classList.toggle('hidden', !isHost);
   $('banner').classList.add('hidden');
   $('eliminatedList').classList.add('hidden');
   $('orderPanel').classList.add('hidden');
@@ -967,8 +991,15 @@ socket.on('roundResult', data => {
   revealShots = data.shots.map((s, i) => ({ ...s, fireTime: SHOT_START_DELAY + i * SHOT_INTERVAL, triggered: false }));
   revealShots.forEach(s => {
     if (s.hit && s.targetId) {
+      const shooterEntry = revealMeshMap.get(s.shooterId);
       const targetEntry = revealMeshMap.get(s.targetId);
-      if (targetEntry) targetEntry.hitTime = s.fireTime + BULLET_TRAVEL_MS;
+      if (targetEntry) {
+        // blood lands when the travelling ball actually reaches the target
+        const dist = shooterEntry
+          ? Math.hypot(targetEntry.x - shooterEntry.x, targetEntry.z - shooterEntry.z)
+          : 4;
+        targetEntry.hitTime = s.fireTime + (dist / BULLET_SPEED) * 1000;
+      }
     }
   });
 
@@ -1030,7 +1061,7 @@ function updateReveal(dt) {
       const dx = Math.sin(shooterEntry.angle), dz = Math.cos(shooterEntry.angle);
       endPos = new THREE.Vector3(shooterEntry.x + dx * 20, 0.55, shooterEntry.z + dz * 20);
     }
-    spawnBulletBeam(shooterEntry, endPos, shooterEntry.color);
+    spawnBullet(shooterEntry, endPos, shooterEntry.color);
   });
 
   revealMeshes.forEach(entry => {

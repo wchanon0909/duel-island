@@ -12,7 +12,7 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 const PLACE_DURATION = 20000; // ms to walk & aim each round
-const NEXT_ROUND_DELAY = 4000; // pause after reveal before next round starts
+const NEXT_ROUND_DELAY = 3000; // pause after reveal before next round starts
 const HIT_WIDTH = 0.3; // perpendicular tolerance of the laser "beam"
 const MIN_ISLAND_SIZE = 6;
 const SHRINK_FACTOR = 0.8;
@@ -21,9 +21,9 @@ const HAT_IDS = ['none', 'party', 'tophat', 'halo', 'horns', 'bunny', 'crown', '
 const BACK_IDS = ['none', 'devilwing', 'chickenwing', 'angelwing', 'jetpack', 'cape', 'balloon'];
 
 // sequential fire animation timing (mirrored client-side in main.js)
-const SHOT_START_DELAY = 1800; // pause to pan the camera out before the first shot
+const SHOT_START_DELAY = 4200; // pause (also the firing-order shuffle window) before the first shot
 const SHOT_INTERVAL = 1300; // gap between each player's turn to fire
-const SHOT_END_PAUSE = 3200; // pause after the last shot before advancing
+const SHOT_END_PAUSE = 800; // pause after the last shot before advancing
 
 const COLORS = [
   '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6',
@@ -422,6 +422,13 @@ io.on('connection', socket => {
   socket.on('playAgain', () => {
     const room = rooms.get(currentRoomCode);
     if (!room || room.hostId !== socket.id) return;
+    room.resetToLobby();
+  });
+
+  socket.on('endToLobby', () => {
+    const room = rooms.get(currentRoomCode);
+    if (!room || room.hostId !== socket.id) return;
+    if (room.state === 'lobby') return;
     room.resetToLobby();
   });
 
