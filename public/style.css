@@ -193,10 +193,6 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
 }
 .orderRow.active { background: #fff2c2; transform: scale(1.04); }
 .orderRow.done { opacity: 0.85; }
-.orderRank {
-  width: 20px; text-align: center; font-family: 'Baloo 2', sans-serif;
-  font-weight: 800; color: #ff9f43; flex-shrink: 0;
-}
 .orderDot {
   width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
   box-shadow: 0 0 0 2px rgba(255,255,255,0.7) inset;

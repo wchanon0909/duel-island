@@ -754,6 +754,7 @@ socket.on('roundStart', data => {
   $('banner').classList.add('hidden');
   $('eliminatedList').classList.add('hidden');
   $('orderPanel').classList.add('hidden');
+  clearInterval(orderShuffleTimer);
   roundEndsAt = data.endsAt;
 
   if (spectating) {
@@ -858,46 +859,83 @@ function clearRevealMeshes() {
 
 // ---------- Firing order table ----------
 let orderRowMap = new Map();
+let orderShuffleTimer = null;
+
+function shuffleIds(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// FLIP: smoothly slide each row from its old position to the new DOM order
+function reorderRows(idList) {
+  const listEl = $('orderList');
+  const firstTops = new Map();
+  orderRowMap.forEach((row, id) => firstTops.set(id, row.li.getBoundingClientRect().top));
+  idList.forEach(id => { const r = orderRowMap.get(id); if (r) listEl.appendChild(r.li); });
+  orderRowMap.forEach((row, id) => {
+    const dy = firstTops.get(id) - row.li.getBoundingClientRect().top;
+    if (!dy) return;
+    row.li.style.transition = 'none';
+    row.li.style.transform = `translateY(${dy}px)`;
+    row.li.getBoundingClientRect(); // force reflow to lock the inverted start
+    row.li.style.transition = 'transform .28s cubic-bezier(.2,.8,.3,1)';
+    row.li.style.transform = '';
+  });
+}
 
 function buildOrderTable(data) {
   const listEl = $('orderList');
   listEl.innerHTML = '';
   orderRowMap.clear();
+  clearInterval(orderShuffleTimer);
+
+  const trueOrder = data.shots.map(s => s.shooterId); // firing order = shot order
   data.shots.forEach(s => {
     const shooter = data.players.find(p => p.id === s.shooterId);
     if (!shooter) return;
     const li = document.createElement('li');
     li.className = 'orderRow';
-    li.innerHTML = `<span class="orderRank">🎲</span>
-      <span class="orderDot" style="background:${shooter.color}"></span>
+    li.innerHTML = `<span class="orderDot" style="background:${shooter.color}"></span>
       <span class="orderName">${escapeHtml(shooter.name)}</span>
       <span class="orderResult"></span>`;
-    listEl.appendChild(li);
-    orderRowMap.set(s.shooterId, {
-      li, rankEl: li.querySelector('.orderRank'), resultEl: li.querySelector('.orderResult')
-    });
+    orderRowMap.set(s.shooterId, { li, resultEl: li.querySelector('.orderResult') });
   });
+
+  // start in a random visible order; the true firing order stays hidden until it settles
+  shuffleIds(trueOrder.slice()).forEach(id => listEl.appendChild(orderRowMap.get(id).li));
   $('orderPanel').classList.remove('hidden');
+
+  // shuffle rows around a few times, then lock into the real firing order
+  // just before the first shot goes off
+  if (trueOrder.length > 1) {
+    const stepMs = 300;
+    const steps = Math.max(1, Math.floor((SHOT_START_DELAY - 350) / stepMs) - 1);
+    let step = 0;
+    clearInterval(orderShuffleTimer);
+    orderShuffleTimer = setInterval(() => {
+      step++;
+      if (step >= steps) {
+        clearInterval(orderShuffleTimer);
+        reorderRows(trueOrder); // settle on the real order
+      } else {
+        reorderRows(shuffleIds(trueOrder.slice()));
+      }
+    }, stepMs);
+  }
 }
 
-function revealOrderRow(rank, shot) {
+function revealOrderRow(shot) {
   const row = orderRowMap.get(shot.shooterId);
   if (!row) return;
   row.li.classList.add('active');
-  let ticks = 0;
-  const maxTicks = 8;
-  const iv = setInterval(() => {
-    ticks++;
-    if (ticks < maxTicks) {
-      row.rankEl.textContent = String(1 + Math.floor(Math.random() * orderRowMap.size));
-    } else {
-      clearInterval(iv);
-      row.rankEl.textContent = rank;
-      row.li.classList.remove('active');
-      row.li.classList.add('done');
-      row.resultEl.textContent = shot.skipped ? '💀' : shot.hit ? '🎯' : '❌';
-    }
-  }, 60);
+  setTimeout(() => {
+    row.li.classList.remove('active');
+    row.li.classList.add('done');
+    row.resultEl.textContent = shot.skipped ? '💀' : shot.hit ? '🎯' : '❌';
+  }, 400);
 }
 
 socket.on('roundResult', data => {
@@ -978,7 +1016,7 @@ function updateReveal(dt) {
   revealShots.forEach((s, idx) => {
     if (s.triggered || revealClock < s.fireTime) return;
     s.triggered = true;
-    revealOrderRow(idx + 1, s);
+    revealOrderRow(s);
     if (s.skipped) return; // this player was already down before their turn came up
     const shooterEntry = revealMeshMap.get(s.shooterId);
     if (!shooterEntry) return;
