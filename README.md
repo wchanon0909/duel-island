@@ -80,3 +80,31 @@ This version also adds the first cosmetic pass:
   - Sniper line preview while aiming after activating Sniper.
 
 Cosmetics do not change hitbox or gameplay balance.
+
+## Standee character update
+
+This version upgrades characters from geometry-based chibi models to 2.5D standee/sprite characters:
+
+- Five hand-drawn standee styles are generated in-game: Islander, Robot, Ninja, Wizard, and Chicken.
+- Player color is used on the character accent and the base.
+- Hats and back decorations are drawn into the standee texture.
+- The in-game character is placed on a small colored board-game base with a front direction pointer.
+- The lobby customization screen now has a larger character preview window.
+- The preview can auto-spin, be rotated left/right with buttons, or be dragged horizontally with the mouse/touch.
+- Hitbox and gameplay balance remain unchanged; all cosmetics are visual only.
+
+## AI GLB character model update
+
+This version integrates uploaded AI-generated GLB character models:
+
+- `public/assets/models/islander.glb`
+- `public/assets/models/ninja.glb`
+
+The Islander and Ninja body skins now load real 3D GLB models in the game scene and in the lobby character preview. Robot, Wizard, and Chicken still use the generated standee fallback until real GLB models are provided.
+
+Important notes:
+
+- GLB models are visual-only and do not change hitbox or gameplay balance.
+- The colored player base and front direction arrow remain visible for gameplay readability.
+- The lobby preview is now rendered with a Three.js 3D preview canvas, so it can rotate the actual model.
+- If a GLB fails to load, the old standee placeholder is kept as fallback.

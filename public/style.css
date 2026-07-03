@@ -402,7 +402,7 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
   border-radius: 20px;
   background: rgba(244,250,255,0.95);
   border: 2px solid #e2eef8;
-  max-height: 360px;
+  max-height: 520px;
   overflow-y: auto;
 }
 .customTitle {
@@ -412,38 +412,78 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
   color: #2f6fb0;
   margin-bottom: 8px;
 }
-.avatarPreview {
-  width: 92px;
-  height: 92px;
-  margin: 0 auto 10px;
-  border-radius: 24px;
-  background: linear-gradient(180deg, #ffffff, #eaf3fb);
+.avatarPreview.standeePreview {
+  width: 230px;
+  height: 235px;
+  margin: 0 auto 8px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 72%, rgba(58,118,170,.20), transparent 38%),
+    linear-gradient(180deg, #ffffff, #eaf7ff 70%, #d9f0ff);
   border: 3px solid #ffffff;
-  box-shadow: 0 8px 18px rgba(30,60,100,0.16);
+  box-shadow: 0 12px 24px rgba(30,60,100,0.18);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
+  overflow: hidden;
+  perspective: 760px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
 }
-.previewBody {
-  width: 54px;
-  height: 54px;
-  border-radius: 22px 22px 18px 18px;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: 'Baloo 2', sans-serif;
-  font-weight: 800;
-  box-shadow: inset 0 -8px 0 rgba(0,0,0,0.12), 0 5px 0 rgba(0,0,0,0.09);
-}
-.previewHat {
+.avatarPreview.standeePreview:active { cursor: grabbing; }
+.avatarPreview.standeePreview::before {
+  content: '';
   position: absolute;
-  top: 0;
+  inset: 18px;
+  border-radius: 24px;
+  border: 2px dashed rgba(76,101,132,0.18);
+  pointer-events: none;
+}
+.previewStage {
+  width: 222px;
+  height: 224px;
+  position: relative;
+  transform-style: preserve-3d;
+  transform-origin: 50% 76%;
+}
+#previewCanvas {
+  width: 222px;
+  height: 224px;
+  display: block;
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 10px 8px rgba(30,60,100,.18));
+}
+.previewBase {
+  width: 118px;
+  height: 22px;
+  border-radius: 50%;
+  position: absolute;
   left: 50%;
-  transform: translateX(-50%);
-  font-size: 26px;
-  line-height: 1;
+  bottom: 5px;
+  transform: translateX(-50%) rotateX(62deg);
+  border: 4px solid rgba(255,255,255,.82);
+  box-shadow: 0 11px 10px rgba(30,60,100,.18), inset 0 -5px 0 rgba(0,0,0,.12);
+  z-index: 1;
+}
+.previewControls {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 0 auto 12px;
+  max-width: 230px;
+}
+.previewControls button {
+  width: auto;
+  flex: 1;
+  min-width: 52px;
+  margin: 0;
+  padding: 7px 8px;
+  border-radius: 12px;
+  font-size: 13px;
+  box-shadow: 0 3px 0 #2a7bc4, 0 6px 10px rgba(63,160,240,0.25);
 }
 .bodyPicker, .colorPicker {
   display: flex;
@@ -454,7 +494,7 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
 }
 .bodyBtn {
   width: auto;
-  min-width: 48px;
+  min-width: 96px;
   height: 40px;
   margin: 0;
   padding: 0 10px;
@@ -479,4 +519,11 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
 .colorBtn.active {
   outline: 4px solid rgba(255,182,72,0.72);
   transform: translateY(-2px) scale(1.08);
+}
+@media (max-width: 780px) {
+  .avatarPreview.standeePreview { width: 210px; height: 218px; }
+  .previewStage { width: 190px; height: 196px; }
+  #previewCanvas { width: 190px; height: 196px; }
+  .previewBase { width: 104px; }
+  .bodyBtn { min-width: 86px; font-size: 13px; }
 }
