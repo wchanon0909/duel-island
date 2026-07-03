@@ -55,7 +55,7 @@ npm start
 - Shotgun uses a visible cone aiming preview with max 3-cell range.
 - Sniper now renders as a long straight fade beam that disappears over about 2 seconds.
 - Taser adds a visible status notice to the affected player in the next round.
-- Foresight still prevents firing for the current round and does not bypass Taser movement lock.
+- Foresight now opens a temporary spectator-style overview that shows all other players during the placement phase. The user can still reposition/rotate, but will not fire in that round and Taser movement lock still applies.
 - Shield blocks one bullet during the round it is used.
 - Active skill capacity remains 1 per player. Angel Blessing behavior is unchanged.
 - Added phase announcements: placement/action phase, firing order roll phase, shooting phase, and round death summary.
@@ -65,3 +65,9 @@ npm start
 - Fixed the lobby character preview so the canvas is contained inside the preview card on different screen sizes and browser zoom levels.
 - Reduced preview-only model scale and camera framing; gameplay model scale and hitbox are unchanged.
 - Preview now resizes from the actual preview frame rather than relying only on canvas CSS size.
+
+
+## Update: Preview scale readability fix v7
+- Character preview now uses a closer camera and dynamic auto-fit scaling.
+- Preview characters are larger/readable again while still staying inside the preview card.
+- Gameplay character size, hitbox, skills, and phase mechanics are unchanged.

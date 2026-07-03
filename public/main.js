@@ -93,7 +93,7 @@ const ACTIVE_SKILLS = [
   { id: 'shotgun', emoji: '🔫', name: 'Shotgun', desc: 'ยิงกระสุนออกเป็นรูปกรวย ระยะไม่เกิน 3 ช่อง' },
   { id: 'sniper', emoji: '🎯', name: 'Sniper', desc: 'ยิงเป็นเส้นตรงยาว เห็นแนวยิงค่อย ๆ fade หายไปใน 2 วินาที' },
   { id: 'taser', emoji: '⚡', name: 'Taser', desc: 'ถ้าโดนเป้าหมาย รอบถัดไปเป้าหมายจะเดินไม่ได้' },
-  { id: 'foresight', emoji: '👁️', name: 'Foresight', desc: 'ใช้เทิร์นนี้เพื่อหลบกระสุนนัดแรก แต่จะไม่ยิงในรอบนี้' },
+  { id: 'foresight', emoji: '👁️', name: 'Foresight', desc: 'มองเห็นผู้เล่นอื่นทั้งหมดแบบ spectator ในรอบนี้ แต่คุณจะไม่ยิง' },
   { id: 'shield', emoji: '🛡️', name: 'Shield', desc: 'เมื่อกดใช้ รอบนั้นจะรับกระสุนได้โดยไม่ตาย 1 ครั้ง' }
 ];
 const passiveById = id => PASSIVE_SKILLS.find(c => c.id === id) || null;
@@ -402,6 +402,11 @@ let previewScene = null;
 let previewCamera = null;
 let previewRoot = null;
 let previewLoopStarted = false;
+let previewFitDirty = true;
+let previewLastFitState = '';
+const PREVIEW_TARGET_FILL = 0.86;
+const PREVIEW_MIN_SCALE = 1.25;
+const PREVIEW_MAX_SCALE = 2.75;
 
 function initModelPreview() {
   if (previewRenderer || !$('previewCanvas')) return;
@@ -409,8 +414,9 @@ function initModelPreview() {
   previewRenderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
   previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   previewScene = new THREE.Scene();
-  previewCamera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
-  previewCamera.position.set(0, 1.02, 4.8);
+  previewCamera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
+  // Preview camera is intentionally closer than the gameplay camera so the hero is readable.
+  previewCamera.position.set(0, 0.95, 3.55);
   previewScene.add(new THREE.AmbientLight(0xffffff, 1.6));
   const key = new THREE.DirectionalLight(0xffffff, 2.1);
   key.position.set(2.6, 4.6, 3.4);
@@ -437,10 +443,58 @@ function resizeModelPreview() {
   previewCamera.updateProjectionMatrix();
 }
 
+
+function fitModelPreviewToFrame(force = false) {
+  if (!previewRoot || !previewCamera || !$('avatarPreview')) return;
+  const frameEl = $('avatarPreview');
+  const rect = frameEl.getBoundingClientRect();
+  const modelReady = !!previewRoot.userData.modelWrapper || !!previewRoot.userData.placeholder;
+  const state = [selfBody, Math.round(rect.width), Math.round(rect.height), modelReady ? 'ready' : 'loading'].join('|');
+  if (!force && !previewFitDirty && state === previewLastFitState) return;
+
+  const savedRotationY = previewRoot.rotation.y;
+  previewRoot.rotation.y = 0;
+  previewRoot.scale.setScalar(1);
+  previewRoot.position.set(0, 0, 0);
+  previewRoot.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(previewRoot);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+  if (!isFinite(size.y) || size.y <= 0.01) {
+    previewRoot.rotation.y = savedRotationY;
+    return;
+  }
+
+  const cameraDistance = Math.max(0.1, Math.abs(previewCamera.position.z));
+  const verticalWorld = 2 * cameraDistance * Math.tan(THREE.MathUtils.degToRad(previewCamera.fov * 0.5));
+  const desiredHeight = verticalWorld * PREVIEW_TARGET_FILL;
+  const fittedScale = THREE.MathUtils.clamp(desiredHeight / size.y, PREVIEW_MIN_SCALE, PREVIEW_MAX_SCALE);
+
+  previewRoot.scale.setScalar(fittedScale);
+  previewRoot.updateMatrixWorld(true);
+  const fittedBox = new THREE.Box3().setFromObject(previewRoot);
+  const fittedCenter = new THREE.Vector3();
+  fittedBox.getCenter(fittedCenter);
+  // Keep the character centered and slightly above the foot-ring/base inside the card.
+  const targetCenterY = previewCamera.position.y - verticalWorld * 0.02;
+  previewRoot.position.x -= fittedCenter.x;
+  previewRoot.position.y += targetCenterY - fittedCenter.y;
+  previewRoot.position.z -= fittedCenter.z;
+  previewRoot.rotation.y = savedRotationY;
+  previewRoot.updateMatrixWorld(true);
+
+  previewFitDirty = false;
+  previewLastFitState = state;
+}
+
 function renderModelPreview() {
   requestAnimationFrame(renderModelPreview);
   if (!previewRenderer || !previewScene || !previewCamera) return;
   resizeModelPreview();
+  fitModelPreviewToFrame(false);
   if (previewRoot) {
     if (previewAutoSpin) previewAngle = (previewAngle + 0.55) % 360;
     previewRoot.rotation.y = THREE.MathUtils.degToRad(previewAngle);
@@ -471,11 +525,13 @@ function updateAvatarPreview() {
     });
   }
   previewRoot = makePlayerMesh(selfColor, true, selfHat, selfBack, selfBody);
-  // Keep the preview contained in its card on every screen size.
-  // The gameplay model scale is unchanged; this is only the lobby preview.
-  previewRoot.scale.setScalar(1.08);
-  previewRoot.position.set(0, -0.24, 0);
+  // Scale is fitted dynamically from the preview frame so it stays readable without overflowing.
+  previewRoot.scale.setScalar(1);
+  previewRoot.position.set(0, 0, 0);
   previewScene.add(previewRoot);
+  previewFitDirty = true;
+  previewLastFitState = '';
+  fitModelPreviewToFrame(true);
   const base = $('previewBase');
   if (base) base.style.background = `linear-gradient(180deg, ${shadeHex(selfColor, 20)}, ${selfColor})`;
   updatePreviewTransform();
@@ -781,6 +837,7 @@ socket.on('yourSkillState', data => {
   myPassiveSkill = data.passiveSkill || null;
   myActiveSkill = data.activeSkill || null;
   myActiveUsed = null;
+  foresightVisionActive = false;
   myMoveLocked = !!data.moveLocked;
   renderStatusNotice();
   if (placing && !spectating) buildActivePanel();
@@ -789,6 +846,9 @@ socket.on('yourSkillState', data => {
 socket.on('activeUsedConfirmed', ({ skillId }) => {
   myActiveUsed = skillId;
   myActiveSkill = null;
+  if (skillId === 'foresight' && placing && !selfReady) {
+    $('instructions').textContent = '👁️ Foresight: กำลังเปิดมุมมอง spectator • เดิน/หมุนเพื่อหลบได้ • รอบนี้จะไม่ยิง';
+  }
   buildActivePanel();
 });
 
@@ -1235,6 +1295,7 @@ function makePlayerMesh(color, isSelf, hat, back, body = 'islander') {
       modelWrapper.userData.modelSkin = body;
       group.add(modelWrapper);
       group.userData.modelWrapper = modelWrapper;
+      if (group === previewRoot) { previewFitDirty = true; previewLastFitState = ''; }
       if (group.userData.placeholder) {
         group.remove(group.userData.placeholder);
         group.userData.placeholder = null;
@@ -1430,7 +1491,7 @@ function makeSniperLineMesh(color) {
   return new THREE.Mesh(geo, mat);
 }
 function updateSkillAimPreview() {
-  if (!placing || !selfMesh || selfReady) { clearAimSkillFx(); return; }
+  if (!placing || !selfMesh || selfReady || myActiveUsed === 'foresight') { clearAimSkillFx(); return; }
   const skill = myActiveUsed || null;
   if (skill !== 'shotgun' && skill !== 'sniper') { clearAimSkillFx(); return; }
   if (!aimSkillFx || aimSkillFx.userData.skill !== skill) {
@@ -1785,31 +1846,60 @@ let selfAlive = true;
 let spectating = false;
 let spectatorMeshes = new Map(); // id -> { mesh, x, z, angle, targetX, targetZ, targetAngle }
 const spectateCamTarget = new THREE.Vector3(0, 14, 10);
+let foresightVisionActive = false;
+const foresightCamTarget = new THREE.Vector3(0, 16, 11);
 
 function clearSpectatorMeshes() {
   spectatorMeshes.forEach(s => scene.remove(s.mesh));
   spectatorMeshes.clear();
 }
 
+function buildVisionMeshEntry(p) {
+  const mesh = makePlayerMesh(p.color, false, p.hat, p.back, p.body);
+  mesh.position.set(p.x, 0, p.z);
+  mesh.rotation.y = p.angle;
+  scene.add(mesh);
+  return { mesh, x: p.x, z: p.z, angle: p.angle, targetX: p.x, targetZ: p.z, targetAngle: p.angle };
+}
+
 socket.on('spectateSnapshot', data => {
   clearSpectatorMeshes();
   data.players.forEach(p => {
     if (p.id === selfId) return;
-    const mesh = makePlayerMesh(p.color, false, p.hat, p.back, p.body);
-    mesh.position.set(p.x, 0, p.z);
-    mesh.rotation.y = p.angle;
-    scene.add(mesh);
-    spectatorMeshes.set(p.id, { mesh, x: p.x, z: p.z, angle: p.angle, targetX: p.x, targetZ: p.z, targetAngle: p.angle });
+    spectatorMeshes.set(p.id, buildVisionMeshEntry(p));
   });
 });
 
-socket.on('spectateMove', ({ id, x, z, angle }) => {
+function updateVisionTarget({ id, x, z, angle }) {
   const s = spectatorMeshes.get(id);
   if (s) { s.targetX = x; s.targetZ = z; s.targetAngle = angle; }
+}
+
+socket.on('spectateMove', updateVisionTarget);
+socket.on('foresightMove', updateVisionTarget);
+
+socket.on('foresightVisionStart', data => {
+  foresightVisionActive = true;
+  clearSpectatorMeshes();
+  (data.players || []).forEach(p => {
+    if (p.id === selfId) return;
+    spectatorMeshes.set(p.id, buildVisionMeshEntry(p));
+  });
+  if (typeof data.islandSize === 'number') {
+    foresightCamTarget.set(0, data.islandSize * 0.95 + 6, data.islandSize * 0.65 + 5);
+  }
+  showCenterAnnouncement('👁️ Foresight: มองเห็นผู้เล่นทุกคนแล้ว รอบนี้คุณจะไม่ยิง', 'skill', 3200);
+  if (placing && !selfReady) {
+    $('instructions').textContent = '👁️ Foresight: เห็นผู้เล่นทุกคนแบบ spectator • เดิน/หมุนเพื่อหลบได้ • รอบนี้จะไม่ยิง • SPACE ยืนยัน';
+  }
 });
 
-function updateSpectate(dt) {
-  if (!spectating) return;
+socket.on('foresightVisionEnd', () => {
+  foresightVisionActive = false;
+  if (!spectating) clearSpectatorMeshes();
+});
+
+function updateVisionMeshes(dt) {
   spectatorMeshes.forEach(s => {
     s.x = THREE.MathUtils.lerp(s.x, s.targetX, Math.min(1, dt * 8));
     s.z = THREE.MathUtils.lerp(s.z, s.targetZ, Math.min(1, dt * 8));
@@ -1817,6 +1907,11 @@ function updateSpectate(dt) {
     s.mesh.position.set(s.x, 0, s.z);
     s.mesh.rotation.y = s.angle;
   });
+}
+
+function updateSpectate(dt) {
+  if (!spectating) return;
+  updateVisionMeshes(dt);
 
   camera.position.lerp(spectateCamTarget, 0.04);
   camera.lookAt(0, 0, 0);
@@ -1891,6 +1986,7 @@ socket.on('roundStart', data => {
   if (selfMesh) { scene.remove(selfMesh); selfMesh = null; }
   if (selfLaser) { scene.remove(selfLaser); selfLaser = null; }
   clearAimSkillFx();
+  foresightVisionActive = false;
 
   spectating = !selfAlive;
   placing = true;
@@ -2010,15 +2106,22 @@ function updatePlacement(dt) {
   selfMesh.rotation.y = selfAngle;
   selfLaser.position.set(selfPos.x, 0.55, selfPos.z);
   selfLaser.rotation.y = selfAngle;
+  selfLaser.visible = myActiveUsed !== 'foresight';
   selfLaser.scale.z = myActiveUsed === 'shotgun' ? 3 : bounds * 2;
   selfLaser.material.opacity = myActiveUsed === 'sniper' ? 0.95 : (myActiveUsed === 'shotgun' ? 0.25 : 0.5);
   selfLaser.material.color.set(myActiveUsed === 'sniper' ? 0xfff2a8 : selfColor);
   updateSkillAimPreview();
 
-  // camera follow, high-angle chase view
-  const camOffset = new THREE.Vector3(0, 11, 7);
-  camera.position.set(selfPos.x + camOffset.x, camOffset.y, selfPos.z + camOffset.z);
-  camera.lookAt(selfPos.x, 0.4, selfPos.z);
+  // camera follow, high-angle chase view. Foresight uses a temporary spectator-style overview.
+  if (foresightVisionActive) {
+    updateVisionMeshes(dt);
+    camera.position.lerp(foresightCamTarget, 0.08);
+    camera.lookAt(0, 0, 0);
+  } else {
+    const camOffset = new THREE.Vector3(0, 11, 7);
+    camera.position.set(selfPos.x + camOffset.x, camOffset.y, selfPos.z + camOffset.z);
+    camera.lookAt(selfPos.x, 0.4, selfPos.z);
+  }
 
   const remain = Math.max(0, roundEndsAt - Date.now());
   const secs = Math.ceil(remain / 1000);
@@ -2207,6 +2310,7 @@ socket.on('roundResult', data => {
   if (selfLaser) { scene.remove(selfLaser); selfLaser = null; }
   clearAimSkillFx();
   clearRevealMeshes();
+  foresightVisionActive = false;
   clearSpectatorMeshes();
 
   data.players.forEach(p => playerInfo.set(p.id, { name: p.name, color: p.color }));

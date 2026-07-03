@@ -302,7 +302,17 @@ class Room {
     if (p.activeSkill !== skillId) return;
     p.activeUsed = skillId;
     p.activeSkill = null;
-    if (skillId === 'foresight') p.skipShot = true;
+    if (skillId === 'foresight') {
+      p.skipShot = true;
+      p.foresightVision = true;
+      io.to(id).emit('foresightVisionStart', {
+        islandSize: this.islandSize,
+        players: [...this.players.values()].filter(o => o.alive && o.id !== p.id).map(o => ({
+          id: o.id, name: o.name, color: o.color, hat: o.hat, back: o.back, body: o.body,
+          x: o.x, z: o.z, angle: o.angle
+        }))
+      });
+    }
     const skillName = skillDisplayName(skillId);
     this.addEvent(`${p.name} ใช้ Active Skill: ${skillName}`, 'skill');
     io.to(id).emit('activeUsedConfirmed', { skillId });
@@ -356,6 +366,7 @@ class Room {
       p.moveLocked = false;
       p.nextMoveLocked = false;
       p.skipShot = false;
+      p.foresightVision = false;
       this.leaveSpectators(p.id);
     }
     this.islandSize = computeIslandSize(this.players.size);
@@ -390,6 +401,7 @@ class Room {
       p.ready = false;
       p.activeUsed = null;
       p.skipShot = false;
+      p.foresightVision = false;
       p.moveLocked = !!p.nextMoveLocked;
       p.nextMoveLocked = false;
       if (this.isSkillMode() && p.activeSkill && Math.random() < 0.35 && p.isBot) {
@@ -472,6 +484,10 @@ class Room {
     }
     p.angle = angle;
     io.to(this.spectatorRoom).emit('spectateMove', { id: p.id, x: p.x, z: p.z, angle: p.angle });
+    for (const viewer of this.players.values()) {
+      if (!viewer.foresightVision || viewer.id === p.id || !viewer.alive || viewer.isBot) continue;
+      io.to(viewer.id).emit('foresightMove', { id: p.id, x: p.x, z: p.z, angle: p.angle });
+    }
   }
 
   resolveRound() {
@@ -512,11 +528,6 @@ class Room {
         const hitX = t.x;
         const hitZ = t.z;
 
-        if (skillMode && t.activeUsed === 'foresight') {
-          ev.foresightDodges.push(t.id);
-          excludeIds.add(t.id);
-          continue;
-        }
         if (skillMode && t.activeUsed === 'shield' && !protectedIds.has(t.id)) {
           protectedIds.add(t.id);
           ev.shieldBlocks.push({ id: t.id, source: 'active' });
@@ -695,6 +706,11 @@ class Room {
       else if ((s.taserLocks || []).length) this.addEvent(`${p.name} ยิง Taser โดนเป้าหมาย`, 'skill');
       else this.addEvent(`${p.name} ยิงพลาด`, 'shot');
     });
+
+    for (const p of alive) {
+      if (p.foresightVision && !p.isBot) io.to(p.id).emit('foresightVisionEnd');
+      p.foresightVision = false;
+    }
 
     const payload = {
       mode: this.mode,
