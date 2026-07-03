@@ -1012,3 +1012,158 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
     grid-template-rows: repeat(4, minmax(0, 1fr)) !important;
   }
 }
+
+/* Skill Phase V5 status and phase announcement polish */
+#hud .centerAnnouncement.phase {
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(225,244,255,0.96));
+  color: #246aa5;
+  border-color: #bfe6ff;
+}
+#hud .centerAnnouncement.summary {
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(232,255,235,0.96));
+  color: #267247;
+  border-color: #bdeec9;
+}
+.statusNotice {
+  position: fixed;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%);
+  z-index: 9;
+  padding: 10px 22px;
+  border-radius: 999px;
+  background: rgba(255, 246, 209, 0.96);
+  border: 3px solid rgba(255, 185, 64, 0.95);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.22);
+  color: #7a4a00;
+  font-family: 'Mitr', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  text-align: center;
+  pointer-events: none;
+}
+@media (max-height: 760px) {
+  .statusNotice { bottom: 56px; font-size: 13px; padding: 8px 16px; }
+}
+
+/* Preview containment fix v6: keep the 3D preview inside the lobby card on every browser size. */
+#lobbyScreen .panel {
+  height: min(860px, calc(100dvh - 28px)) !important;
+  max-height: calc(100dvh - 28px) !important;
+  overflow: hidden !important;
+}
+.customizationBox.heroSelectBox {
+  flex: 1 1 auto !important;
+  min-height: 320px !important;
+  max-height: min(430px, 48dvh) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+.customizationBox.heroSelectBox .customTitle {
+  flex: 0 0 auto !important;
+}
+.heroSelectionLayout {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  grid-template-columns: minmax(230px, 32%) minmax(0, 1fr) !important;
+  overflow: hidden !important;
+}
+.heroPreviewColumn {
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  justify-items: center !important;
+}
+.avatarPreview.standeePreview {
+  position: relative !important;
+  width: min(100%, 292px) !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1.12 !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  align-self: center !important;
+  justify-self: center !important;
+}
+.previewStage,
+#previewCanvas {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+#previewCanvas {
+  display: block !important;
+  object-fit: contain !important;
+}
+.previewBase {
+  width: min(132px, 52%) !important;
+  height: 18px !important;
+  bottom: 8px !important;
+  pointer-events: none !important;
+}
+.selectedHeroTitle {
+  flex: 0 0 auto !important;
+  margin: 4px 0 0 !important;
+  line-height: 1.1 !important;
+  font-size: clamp(16px, 1.8dvh, 19px) !important;
+  text-align: center !important;
+}
+.heroGridColumn {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+.bodyPicker.heroGrid {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+@media (max-height: 820px) {
+  #lobbyScreen .panel {
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+    gap: 4px !important;
+  }
+  #lobbyScreen .panel h1 { font-size: 22px !important; }
+  #lobbyScreen .roomCode { font-size: 28px !important; margin-bottom: 4px !important; }
+  .lobbyModeBox { padding: 9px 12px !important; }
+  .customizationBox.heroSelectBox {
+    min-height: 290px !important;
+    max-height: min(390px, 46dvh) !important;
+    padding: 10px !important;
+  }
+  .avatarPreview.standeePreview {
+    width: min(100%, 246px) !important;
+  }
+  .bodyPicker.heroGrid { gap: 8px !important; }
+  .bodyBtn.heroCard { padding: 7px 9px !important; }
+}
+@media (max-height: 700px) {
+  .customizationBox.heroSelectBox {
+    min-height: 260px !important;
+    max-height: min(340px, 44dvh) !important;
+  }
+  .avatarPreview.standeePreview {
+    width: min(100%, 210px) !important;
+  }
+  .selectedHeroTitle { font-size: 15px !important; }
+  .bodyBtn.heroCard .heroName { font-size: 13px !important; }
+}
+@media (max-width: 760px) {
+  .customizationBox.heroSelectBox {
+    max-height: none !important;
+  }
+  .heroSelectionLayout {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: minmax(210px, 38%) minmax(0, 1fr) !important;
+  }
+  .avatarPreview.standeePreview {
+    width: min(100%, 220px) !important;
+  }
+}

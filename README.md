@@ -47,3 +47,21 @@ npm start
 - Character preview now spins automatically only; manual rotate/stop buttons were removed.
 - Player names above characters are centered text without a background label box.
 - Game over screen now shows the winner standing alone on a small stage and includes a kill-count summary table.
+
+## Skill Phase V5 update
+
+- Skill mode no longer has passive selection. Every player starts with `Dodge` once per game.
+- Active skills remain: Shotgun, Sniper, Taser, Foresight, Shield.
+- Shotgun uses a visible cone aiming preview with max 3-cell range.
+- Sniper now renders as a long straight fade beam that disappears over about 2 seconds.
+- Taser adds a visible status notice to the affected player in the next round.
+- Foresight still prevents firing for the current round and does not bypass Taser movement lock.
+- Shield blocks one bullet during the round it is used.
+- Active skill capacity remains 1 per player. Angel Blessing behavior is unchanged.
+- Added phase announcements: placement/action phase, firing order roll phase, shooting phase, and round death summary.
+- Bullet travel slows down near a hit target for a short cinematic effect.
+
+## Update: Preview containment fix v6
+- Fixed the lobby character preview so the canvas is contained inside the preview card on different screen sizes and browser zoom levels.
+- Reduced preview-only model scale and camera framing; gameplay model scale and hitbox are unchanged.
+- Preview now resizes from the actual preview frame rather than relying only on canvas CSS size.

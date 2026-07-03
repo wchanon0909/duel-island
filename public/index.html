@@ -32,7 +32,7 @@
         <div class="modePicker">
           <div class="modeTitle">เลือกโหมดเกม</div>
           <label><input type="radio" name="gameMode" value="classic" checked> Classic mode — ยิงกันธรรมดา</label>
-          <label><input type="radio" name="gameMode" value="skill"> Skill mode — Passive + Active Skill</label>
+          <label><input type="radio" name="gameMode" value="skill"> Skill mode — Dodge + Active Skill</label>
         </div>
         <button id="btnCreate">สร้างห้องใหม่</button>
       </div>
@@ -90,6 +90,7 @@
       <div class="stat"><div class="label">เวลา</div><div class="value" id="timerValue">--</div></div>
     </div>
     <div class="instructions" id="instructions">WASD เดิน • เมาส์หมุนทิศเลเซอร์ • กด SPACE ยืนยันพร้อมยิง</div>
+    <div class="statusNotice hidden" id="statusNotice"></div>
     <button id="btnEndGame" class="endGameBtn hidden" title="จบเกมและกลับล็อบบี้">🏁 จบเกม</button>
     <div class="banner hidden" id="banner"></div>
     <div class="centerAnnouncement hidden" id="centerAnnouncement"></div>

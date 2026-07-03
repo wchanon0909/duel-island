@@ -87,13 +87,11 @@ let selfBack = 'none';
 
 // ---------- Skill System V2 ----------
 const PASSIVE_SKILLS = [
-  { id: 'bounce', emoji: '🎾', name: 'Bounce Bullet', desc: 'กระสุนปกติเด้งกำแพง/ของแข็งได้ 1 ครั้ง ไม่เด้งจากผู้เล่น' },
-  { id: 'dodge', emoji: '💨', name: 'Dodge', desc: 'หลบกระสุนได้ 1 ครั้งตลอดทั้งเกม กระสุนจะวิ่งผ่านไป' },
-  { id: 'secondchance', emoji: '🔁', name: 'Second Chance', desc: 'โดนยิงแล้วถอยหลัง 3 ช่อง ถ้าตกแมพจะตาย ถ้ายังไม่ยิงจะยิงสวน' }
+  { id: 'dodge', emoji: '💨', name: 'Dodge', desc: 'ทุกคนเริ่มต้นด้วย Dodge 1 ครั้ง กระสุนจะวิ่งผ่านไปโดยไม่ตาย' }
 ];
 const ACTIVE_SKILLS = [
   { id: 'shotgun', emoji: '🔫', name: 'Shotgun', desc: 'ยิงกระสุนออกเป็นรูปกรวย ระยะไม่เกิน 3 ช่อง' },
-  { id: 'sniper', emoji: '🎯', name: 'Sniper', desc: 'ยิงตรงระยะไกลและแม่นขึ้น แต่ Dodge/Shield ยังป้องกันได้' },
+  { id: 'sniper', emoji: '🎯', name: 'Sniper', desc: 'ยิงเป็นเส้นตรงยาว เห็นแนวยิงค่อย ๆ fade หายไปใน 2 วินาที' },
   { id: 'taser', emoji: '⚡', name: 'Taser', desc: 'ถ้าโดนเป้าหมาย รอบถัดไปเป้าหมายจะเดินไม่ได้' },
   { id: 'foresight', emoji: '👁️', name: 'Foresight', desc: 'ใช้เทิร์นนี้เพื่อหลบกระสุนนัดแรก แต่จะไม่ยิงในรอบนี้' },
   { id: 'shield', emoji: '🛡️', name: 'Shield', desc: 'เมื่อกดใช้ รอบนั้นจะรับกระสุนได้โดยไม่ตาย 1 ครั้ง' }
@@ -108,9 +106,10 @@ let myActiveUsed = null;
 let myMoveLocked = false;
 
 // mirrors server.js timing constants for the sequential fire animation
-const SHOT_START_DELAY = 4200;
-const SHOT_INTERVAL = 1300;
+const SHOT_START_DELAY = 4800;
+const SHOT_INTERVAL = 1600;
 const BULLET_SPEED = 16; // units/sec — medium travel speed for the bullet ball
+const BULLET_SLOW_SPEED = 4.0; // slow-motion when a bullet is close to a victim
 
 const $ = id => document.getElementById(id);
 let centerAnnouncementTimer = null;
@@ -410,8 +409,8 @@ function initModelPreview() {
   previewRenderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
   previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   previewScene = new THREE.Scene();
-  previewCamera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
-  previewCamera.position.set(0, 1.1, 4.0);
+  previewCamera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
+  previewCamera.position.set(0, 1.02, 4.8);
   previewScene.add(new THREE.AmbientLight(0xffffff, 1.6));
   const key = new THREE.DirectionalLight(0xffffff, 2.1);
   key.position.set(2.6, 4.6, 3.4);
@@ -429,8 +428,10 @@ function initModelPreview() {
 function resizeModelPreview() {
   if (!previewRenderer || !$('previewCanvas')) return;
   const canvasEl = $('previewCanvas');
-  const w = canvasEl.clientWidth || 220;
-  const h = canvasEl.clientHeight || 220;
+  const frameEl = $('avatarPreview') || canvasEl.parentElement || canvasEl;
+  const rect = frameEl.getBoundingClientRect();
+  const w = Math.max(120, Math.round(rect.width || canvasEl.clientWidth || 220));
+  const h = Math.max(140, Math.round(rect.height || canvasEl.clientHeight || 240));
   previewRenderer.setSize(w, h, false);
   previewCamera.aspect = w / h;
   previewCamera.updateProjectionMatrix();
@@ -470,8 +471,10 @@ function updateAvatarPreview() {
     });
   }
   previewRoot = makePlayerMesh(selfColor, true, selfHat, selfBack, selfBody);
-  previewRoot.scale.setScalar(1.42);
-  previewRoot.position.set(0, -0.44, 0);
+  // Keep the preview contained in its card on every screen size.
+  // The gameplay model scale is unchanged; this is only the lobby preview.
+  previewRoot.scale.setScalar(1.08);
+  previewRoot.position.set(0, -0.24, 0);
   previewScene.add(previewRoot);
   const base = $('previewBase');
   if (base) base.style.background = `linear-gradient(180deg, ${shadeHex(selfColor, 20)}, ${selfColor})`;
@@ -481,6 +484,7 @@ function updateAvatarPreview() {
 
 // Preview is intentionally auto-rotating only. No manual rotate/stop controls.
 previewAutoSpin = true;
+window.addEventListener('resize', () => requestAnimationFrame(resizeModelPreview));
 updateAvatarPreview();
 
 const homeScreen = $('homeScreen');
@@ -580,7 +584,7 @@ socket.on('roomUpdate', data => {
     $('lobbyCode').textContent = data.code;
     const modeBox = $('lobbyModeBox');
     if (modeBox) {
-      const modeLabel = currentMode === 'skill' ? 'Skill mode — Passive + Active Skill' : 'Classic mode — ยิงกันธรรมดา';
+      const modeLabel = currentMode === 'skill' ? 'Skill mode — Dodge + Active Skill' : 'Classic mode — ยิงกันธรรมดา';
       modeBox.innerHTML = `<div>โหมดปัจจุบัน: <b>${modeLabel}</b></div>` + (isHost ? `
         <div class="lobbyModeOptions">
           <button class="${currentMode === 'classic' ? 'active' : ''}" data-mode="classic">Classic</button>
@@ -689,6 +693,17 @@ function renderEventLog(events = []) {
   el.classList.remove('hidden');
 }
 
+function renderStatusNotice() {
+  const el = $('statusNotice');
+  if (!el) return;
+  if (currentMode === 'skill' && myMoveLocked && !spectating) {
+    el.textContent = '⚡ คุณไม่สามารถเดินได้ในรอบนี้ เนื่องจากโดน Taser';
+    el.classList.remove('hidden');
+  } else {
+    el.classList.add('hidden');
+  }
+}
+
 socket.on('eventLogUpdate', ({ events }) => renderEventLog(events || []));
 
 socket.on('skillState', data => {
@@ -699,6 +714,7 @@ socket.on('skillState', data => {
     myPassiveSkill = me.passiveSkill || myPassiveSkill;
     myActiveSkill = me.activeSkill || null;
     myMoveLocked = !!me.moveLocked;
+    renderStatusNotice();
     if (placing && !spectating) buildActivePanel();
   }
 });
@@ -766,6 +782,7 @@ socket.on('yourSkillState', data => {
   myActiveSkill = data.activeSkill || null;
   myActiveUsed = null;
   myMoveLocked = !!data.moveLocked;
+  renderStatusNotice();
   if (placing && !spectating) buildActivePanel();
 });
 
@@ -1389,20 +1406,20 @@ function clearAimSkillFx() {
 function makeShotgunConeMesh(color) {
   const spread = 0.34;
   const range = 3;
-  const shape = new THREE.Shape();
-  shape.moveTo(0, 0);
-  for (let i = 0; i <= 16; i++) {
-    const a = -spread + (spread * 2 * i / 16);
-    const x = Math.sin(a) * range;
-    const y = Math.cos(a) * range;
-    if (i === 0) shape.lineTo(x, y);
-    else shape.lineTo(x, y);
+  const segments = 28;
+  const verts = [0, 0, 0];
+  const indices = [];
+  for (let i = 0; i <= segments; i++) {
+    const a = -spread + (spread * 2 * i / segments);
+    verts.push(Math.sin(a) * range, 0, Math.cos(a) * range);
+    if (i > 0) indices.push(0, i, i + 1);
   }
-  shape.lineTo(0, 0);
-  const geo = new THREE.ShapeGeometry(shape);
-  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.30, side: THREE.DoubleSide, depthWrite: false });
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.rotation.x = -Math.PI / 2;
   return mesh;
 }
 function makeSniperLineMesh(color) {
@@ -1422,12 +1439,12 @@ function updateSkillAimPreview() {
     aimSkillFx.userData.skill = skill;
     scene.add(aimSkillFx);
   }
-  aimSkillFx.position.set(selfPos.x, 0.032, selfPos.z);
-  aimSkillFx.rotation.z = skill === 'shotgun' ? -selfAngle : 0;
+  aimSkillFx.position.set(selfPos.x, skill === 'sniper' ? 0.09 : 0.034, selfPos.z);
+  aimSkillFx.rotation.y = selfAngle;
   if (skill === 'sniper') {
-    aimSkillFx.rotation.y = selfAngle;
-    aimSkillFx.position.y = 0.09;
     aimSkillFx.scale.z = bounds * 2;
+  } else {
+    aimSkillFx.scale.set(1, 1, 1);
   }
 }
 
@@ -1610,7 +1627,7 @@ function spawnDodgeAfterimage(entry, color = 0x9fe0ff) {
 function spawnShotgunConeAt(entry) {
   const mesh = makeShotgunConeMesh(entry.color || 0xffffff);
   mesh.position.set(entry.x, 0.045, entry.z);
-  mesh.rotation.z = -entry.angle;
+  mesh.rotation.y = entry.angle;
   scene.add(mesh);
   fxBubbles.push({ mesh, life: 0, duration: 0.9, base: 1 });
 }
@@ -1622,6 +1639,32 @@ function spawnSniperLineAt(entry) {
   mesh.scale.z = currentIslandSize * 2.4;
   scene.add(mesh);
   fxBubbles.push({ mesh, life: 0, duration: 0.8, base: 1 });
+}
+
+function makeBeamBetween(p1, p2, color = 0xfff2a8, radius = 0.045, opacity = 0.95) {
+  const dir = new THREE.Vector3().subVectors(p2, p1);
+  const len = Math.max(0.001, dir.length());
+  const geo = new THREE.CylinderGeometry(radius, radius, len, 12);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(p1).add(p2).multiplyScalar(0.5);
+  mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+  return mesh;
+}
+
+function spawnSniperFadeShot(color, segments) {
+  if (!segments || !segments.length) return;
+  segments.forEach(sg => {
+    const p1 = new THREE.Vector3(sg.x1, 0.66, sg.z1);
+    const p2 = new THREE.Vector3(sg.x2, 0.66, sg.z2);
+    const beam = makeBeamBetween(p1, p2, 0xfff2a8, 0.052, 0.96);
+    scene.add(beam);
+    fxBeams.push({ mesh: beam, life: 0, duration: 2.0, startOpacity: 0.96 });
+    spawnFlash(sg.x1, 0.65, sg.z1, 0.9, 0xfff2a8, 0.28);
+    if (sg.hitId) {
+      setTimeout(() => killVictim(sg.hitId), 850);
+    }
+  });
 }
 
 function makeBloodDecal() {
@@ -1670,12 +1713,15 @@ function updateFx(dt) {
     const b = fxBeams[i];
     b.life += dt;
     const t = b.life / b.duration;
-    b.mesh.material.opacity = Math.max(0, 0.95 * (1 - t));
+    b.mesh.material.opacity = Math.max(0, (b.startOpacity || 0.95) * (1 - t));
     if (t >= 1) { scene.remove(b.mesh); fxBeams.splice(i, 1); }
   }
   for (let i = fxBullets.length - 1; i >= 0; i--) {
     const b = fxBullets[i];
-    b.dist += BULLET_SPEED * dt;
+    const remainingToNext = b.nextIdx < b.cum.length ? (b.cum[b.nextIdx] - b.dist) : Infinity;
+    const nextIsVictim = b.nextIdx < b.hitAt.length && !!b.hitAt[b.nextIdx];
+    const speed = nextIsVictim && remainingToNext < 4.0 ? BULLET_SLOW_SPEED : BULLET_SPEED;
+    b.dist += speed * dt;
     // trigger the kill on any victim tagged at a vertex we've now passed
     while (b.nextIdx < b.pts.length && b.dist >= b.cum[b.nextIdx]) {
       if (b.hitAt[b.nextIdx]) killVictim(b.hitAt[b.nextIdx]);
@@ -1865,6 +1911,7 @@ socket.on('roundStart', data => {
   $('passiveOverlay').classList.add('hidden');
   $('hud').classList.remove('hidden');
   $('gameCanvas').classList.remove('hidden');
+  showCenterAnnouncement('🚶 Phase 1: เดิน • วางตำแหน่ง • หมุน • ใช้สกิล', 'phase', 3000);
   roster = data.roster || [];
   roster.forEach(pl => playerInfo.set(pl.id, { name: pl.name, color: pl.color }));
   renderSkillPanel(roster);
@@ -1872,6 +1919,7 @@ socket.on('roundStart', data => {
   renderPowerLog();
 
   if (spectating) {
+    renderStatusNotice();
     $('orderPanel').classList.add('hidden');
     spectateCamTarget.set(0, data.islandSize * 0.85 + 6, data.islandSize * 0.6 + 4);
     $('instructions').textContent = '👻 คุณตกรอบแล้ว กำลังดูผู้เล่นที่เหลือหาที่กำบัง...';
@@ -1884,6 +1932,7 @@ socket.on('roundStart', data => {
     selfBack = me ? (me.back || selfBack) : selfBack;
     selfColor = me ? (me.color || selfColor) : selfColor;
     myMoveLocked = !!(me && me.moveLocked);
+    renderStatusNotice();
     $('instructions').textContent = myMoveLocked
       ? '⚡ รอบนี้โดน Taser: เดินไม่ได้ แต่ยังหมุนเล็ง/ยิง/ใช้สกิลได้ • SPACE ยืนยัน'
       : 'WASD เดิน • เมาส์เล็งทิศ • กด Active Skill ได้ถ้ามี • SPACE ยืนยัน';
@@ -2187,6 +2236,8 @@ socket.on('roundResult', data => {
   revealShots = data.shots.map((s, i) => ({ ...s, fireTime: SHOT_START_DELAY + i * SHOT_INTERVAL, triggered: false }));
 
   buildOrderTable(data);
+  showCenterAnnouncement('🎲 Phase 2: จัดลำดับการยิง', 'phase', 3200);
+  setTimeout(() => showCenterAnnouncement('🔫 Phase 3: ยิง', 'phase', 2200), Math.max(400, SHOT_START_DELAY - 700));
 
   // camera pulls back to see whole island
   const size = data.islandSize;
@@ -2213,9 +2264,11 @@ socket.on('roundResult', data => {
       $('skillPanel').classList.add('angelFlash');
       setTimeout(() => $('skillPanel').classList.remove('angelFlash'), 3200);
     } else if (names.length) {
-      banner.textContent = `💥 ตกรอบ: ${names.join(', ')}`;
+      banner.textContent = `📋 สรุปการตายรอบนี้: ${names.join(', ')}`;
+      showCenterAnnouncement(`📋 สรุปรอบนี้: ตกรอบ ${names.length} คน`, 'summary', 3000);
     } else {
-      banner.textContent = '😮 ไม่มีใครโดนยิงรอบนี้';
+      banner.textContent = '📋 สรุปการตายรอบนี้: ไม่มีใครโดนยิง';
+      showCenterAnnouncement('📋 สรุปรอบนี้: ไม่มีใครตกรอบ', 'summary', 3000);
     }
     elimEl.textContent = data.survivors.length + ' คนยังรอด';
     banner.classList.remove('hidden');
@@ -2277,7 +2330,6 @@ function handlePowerEvents(s) {
     focusOn(shooter, 1600);
     floatLabel(shooter.x, shooter.z, 2.5 * shooter.size, SKILL_LABEL[s.activeUsed] || s.activeUsed, '#e7d6ff');
     if (s.activeUsed === 'shotgun') spawnShotgunConeAt(shooter);
-    if (s.activeUsed === 'sniper') spawnSniperLineAt(shooter);
     if (s.activeUsed === 'shield') spawnShieldBubble(shooter);
   }
   if (shooter && s.counter) {
@@ -2351,7 +2403,11 @@ function triggerShot(s) {
   handlePowerEvents(s);
 
   spawnMuzzleFlash(shooterEntry);
-  const bulletR = s.type === 'sniper' ? 0.085 : (s.type === 'shotgun' ? 0.1 : 0.12);
+  if (s.type === 'sniper') {
+    (s.bullets || []).forEach(b => spawnSniperFadeShot(shooterEntry.color, b.segments));
+    return;
+  }
+  const bulletR = s.type === 'shotgun' ? 0.1 : 0.12;
   (s.bullets || []).forEach(b => spawnSegmentBullet(shooterEntry.color, b.segments, bulletR));
 }
 

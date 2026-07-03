@@ -11,14 +11,14 @@ app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders: res => res.setHeader('Cache-Control', 'no-cache')
 }));
 
-const PLACE_DURATION = 45000;
-const PASSIVE_DURATION = 15000;
-const NEXT_ROUND_DELAY = 3000;
+const PLACE_DURATION = 55000;
+const PASSIVE_DURATION = 0;
+const NEXT_ROUND_DELAY = 4000;
 const HIT_WIDTH = 0.3;
 const MIN_ISLAND_SIZE = 6;
 const SHRINK_FACTOR = 0.8;
 
-const PASSIVE_IDS = ['bounce', 'dodge', 'secondchance'];
+const PASSIVE_IDS = ['dodge'];
 const ACTIVE_IDS = ['shotgun', 'sniper', 'taser', 'foresight', 'shield'];
 const SHOTGUN_SPREAD = 0.34;
 const SHOTGUN_RANGE = 3;
@@ -27,9 +27,9 @@ const HAT_IDS = ['none', 'party', 'tophat', 'halo', 'horns', 'bunny', 'crown', '
 const BACK_IDS = ['none', 'devilwing', 'chickenwing', 'angelwing', 'jetpack', 'cape', 'balloon'];
 const BODY_IDS = ['islander', 'islander-girl', 'ninja', 'princess', 'pirate', 'suitguy', 'dino', 'armedguy'];
 
-const SHOT_START_DELAY = 4200;
-const SHOT_INTERVAL = 1300;
-const SHOT_END_PAUSE = 800;
+const SHOT_START_DELAY = 4800;
+const SHOT_INTERVAL = 1600;
+const SHOT_END_PAUSE = 1400;
 
 const COLORS = [
   '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6',
@@ -283,7 +283,7 @@ class Room {
     for (const p of this.players.values()) {
       if (!p.alive) continue;
       if (!p.passiveSkill) {
-        p.passiveSkill = pickRandom(PASSIVE_IDS);
+        p.passiveSkill = 'dodge';
         this.addEvent(`${p.name} ไม่เลือกทันเวลา ระบบสุ่ม Passive Skill ให้`, 'skill');
       }
     }
@@ -347,7 +347,7 @@ class Room {
     for (const p of this.players.values()) {
       p.alive = true;
       p.ready = false;
-      p.passiveSkill = null;
+      p.passiveSkill = this.isSkillMode() ? 'dodge' : null;
       p.activeSkill = null;
       p.activeUsed = null;
       p.kills = 0;
@@ -359,16 +359,15 @@ class Room {
       this.leaveSpectators(p.id);
     }
     this.islandSize = computeIslandSize(this.players.size);
-    this.addEvent(this.isSkillMode() ? 'เริ่มเกม Skill Mode' : 'เริ่มเกม Classic Mode', 'system');
-    if (this.isSkillMode()) this.startPassiveSelection();
-    else this.startRound();
+    this.addEvent(this.isSkillMode() ? 'เริ่มเกม Skill Mode: ทุกคนได้รับ Dodge 1 ครั้ง' : 'เริ่มเกม Classic Mode', 'system');
+    this.startRound();
   }
 
   startPassiveSelection() {
     this.state = 'passive';
     this.passiveEndsAt = Date.now() + PASSIVE_DURATION;
     for (const p of this.players.values()) {
-      if (p.isBot) p.passiveSkill = pickRandom(PASSIVE_IDS);
+      if (p.isBot) p.passiveSkill = 'dodge';
     }
     io.to(this.code).emit('passiveSelectStart', {
       duration: PASSIVE_DURATION,
