@@ -77,3 +77,9 @@ npm start
 - Improved the hero preview fit so the 3D character stays readable and closer to equal size across heroes.
 - Passive Dodge is now consumed after it saves the player once, then disappears from the skill table.
 - Shield remains an Active Skill. When used, it protects the player from one lethal shot in that round and shows a stronger shield effect when blocking.
+
+
+## v10 Preview Final Fix
+- Reworked the lobby hero preview layout so the preview viewport has a stable fixed readable size on desktop screens.
+- Reworked preview camera fitting to use normalized character bounds and a safe aspect-ratio clamp so heroes no longer shrink into a tall narrow capsule.
+- The preview only affects the lobby; gameplay scale, hitbox, skill behavior, Dodge, Shield, and Foresight logic are unchanged.

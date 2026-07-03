@@ -405,10 +405,13 @@ let previewRoot = null;
 let previewLoopStarted = false;
 let previewFitDirty = true;
 let previewLastFitState = '';
-const PREVIEW_TARGET_FILL = 0.82;
-const PREVIEW_MIN_CAMERA_Z = 1.7;
-const PREVIEW_MAX_CAMERA_Z = 5.2;
-const PREVIEW_MODEL_BOOST = 1.18;
+const PREVIEW_TARGET_FILL = 0.94;
+const PREVIEW_MIN_CAMERA_Z = 2.15;
+const PREVIEW_MAX_CAMERA_Z = 3.65;
+const PREVIEW_MODEL_BOOST = 1.34;
+const PREVIEW_LOOK_AT_Y = 0.88;
+const PREVIEW_FIXED_CARD_MIN_W = 240;
+const PREVIEW_FIXED_CARD_MIN_H = 250;
 
 function initModelPreview() {
   if (previewRenderer || !$('previewCanvas')) return;
@@ -438,10 +441,14 @@ function resizeModelPreview() {
   const canvasEl = $('previewCanvas');
   const frameEl = $('avatarPreview') || canvasEl.parentElement || canvasEl;
   const rect = frameEl.getBoundingClientRect();
-  const w = Math.max(120, Math.round(rect.width || canvasEl.clientWidth || 220));
-  const h = Math.max(140, Math.round(rect.height || canvasEl.clientHeight || 240));
+  // Force a sane aspect ratio even if the browser is still resolving flex/grid sizes.
+  // The previous implementation could receive a very narrow width on some screens,
+  // which made the camera aspect tiny and caused the hero to appear as a small figure
+  // inside a tall capsule. These lower bounds keep the preview readable.
+  const w = Math.max(PREVIEW_FIXED_CARD_MIN_W, Math.round(rect.width || canvasEl.clientWidth || 280));
+  const h = Math.max(PREVIEW_FIXED_CARD_MIN_H, Math.round(rect.height || canvasEl.clientHeight || 285));
   previewRenderer.setSize(w, h, false);
-  previewCamera.aspect = w / h;
+  previewCamera.aspect = Math.max(0.78, Math.min(1.22, w / h));
   previewCamera.updateProjectionMatrix();
 }
 
@@ -461,7 +468,8 @@ function fitModelPreviewToFrame(force = false) {
   previewRoot.updateMatrixWorld(true);
 
   // Fit by the actual character model when available, not by the colored foot ring.
-  // This keeps all heroes close to the same visual height in the preview.
+  // All uploaded characters are normalized to the same world height in cloneAndFitModel(),
+  // so this camera fit keeps every hero visually similar in the preview.
   const fitTarget = previewRoot.userData.modelWrapper || previewRoot.userData.placeholder || previewRoot;
   let box = new THREE.Box3().setFromObject(fitTarget);
   let size = new THREE.Vector3();
@@ -478,25 +486,28 @@ function fitModelPreviewToFrame(force = false) {
     return;
   }
 
-  const aspect = Math.max(0.35, previewCamera.aspect || 1);
+  const aspect = Math.max(0.78, Math.min(1.22, previewCamera.aspect || 1));
   const fovRad = THREE.MathUtils.degToRad(previewCamera.fov * 0.5);
-  const neededVertical = Math.max(size.y, size.x / aspect) / PREVIEW_TARGET_FILL;
+  const visualHeight = size.y;
+  const visualWidth = Math.max(size.x, size.z * 0.62);
+  const neededVertical = Math.max(visualHeight, visualWidth / aspect) / PREVIEW_TARGET_FILL;
   const distance = THREE.MathUtils.clamp(neededVertical / (2 * Math.tan(fovRad)), PREVIEW_MIN_CAMERA_Z, PREVIEW_MAX_CAMERA_Z);
 
-  previewCamera.position.set(0, 0.86, distance);
-  previewCamera.lookAt(0, 0.82, 0);
+  previewCamera.position.set(0, PREVIEW_LOOK_AT_Y, distance);
+  previewCamera.lookAt(0, PREVIEW_LOOK_AT_Y, 0);
   previewCamera.updateProjectionMatrix();
 
-  // Center the character body in the card while keeping the feet above the red base shadow.
+  // Center the character body in the preview card and keep feet above the red base.
   previewRoot.position.x -= center.x;
   previewRoot.position.z -= center.z;
-  previewRoot.position.y += 0.82 - center.y;
+  previewRoot.position.y += PREVIEW_LOOK_AT_Y - center.y - 0.02;
   previewRoot.rotation.y = savedRotationY;
   previewRoot.updateMatrixWorld(true);
 
   previewFitDirty = false;
   previewLastFitState = state;
 }
+
 
 function renderModelPreview() {
   requestAnimationFrame(renderModelPreview);
