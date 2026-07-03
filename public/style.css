@@ -167,6 +167,38 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
   color: #d9534f;
   box-shadow: 0 10px 24px rgba(30,60,100,0.25);
 }
+#hud .centerAnnouncement {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.86);
+  z-index: 12; pointer-events: none;
+  min-width: 280px; max-width: min(760px, 86vw);
+  padding: 18px 30px; border-radius: 24px;
+  font-family: 'Baloo 2', sans-serif; font-size: 32px; font-weight: 800; line-height: 1.12;
+  text-align: center; color: #2b3a55;
+  background: rgba(255,255,255,0.95); border: 4px solid #ffffff;
+  box-shadow: 0 18px 50px rgba(30,60,100,0.35);
+  opacity: 0;
+}
+#hud .centerAnnouncement.show {
+  opacity: 1; transform: translate(-50%, -50%) scale(1);
+  animation: centerPop .5s cubic-bezier(.18,1.35,.3,1), centerPulse 1.15s ease-in-out infinite alternate;
+}
+#hud .centerAnnouncement.angel {
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(255,244,194,0.96));
+  color: #bd7b00;
+}
+#hud .centerAnnouncement.skill {
+  background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(232,222,255,0.96));
+  color: #6c43b8;
+}
+@keyframes centerPop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.55) rotate(-3deg); }
+  70% { opacity: 1; transform: translate(-50%, -50%) scale(1.08) rotate(1deg); }
+  100% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
+}
+@keyframes centerPulse {
+  from { box-shadow: 0 18px 50px rgba(30,60,100,0.28), 0 0 0 rgba(255,221,120,0); }
+  to { box-shadow: 0 18px 54px rgba(30,60,100,0.38), 0 0 34px rgba(255,221,120,0.88); }
+}
 #hud .eliminatedList {
   position: absolute; top: 158px; left: 50%; transform: translateX(-50%);
   font-size: 14px; font-weight: 600; color: #3fa0f0; text-align: center;
@@ -193,6 +225,7 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
   transition: background .2s ease, transform .2s ease;
 }
 .orderRow.active { background: #fff2c2; transform: scale(1.04); }
+.orderRow.rolling { background: #eaf4ff; box-shadow: 0 0 0 2px rgba(111,177,232,0.28) inset; }
 .orderRow.done { opacity: 0.85; }
 .orderDot {
   width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
@@ -257,3 +290,107 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
 
 #gameOverPanel { z-index: 20; }
 #gameOverPanel .panel h1 { color: #ff9f43; }
+
+.modePicker {
+  margin: 4px 0 14px;
+  padding: 10px 12px;
+  text-align: left;
+  background: #f4faff;
+  border: 2px solid #d8e9f8;
+  border-radius: 14px;
+  color: #4c6584;
+  font-size: 13px;
+}
+.modePicker label { display: block; margin: 6px 0; cursor: pointer; }
+.modeTitle { font-weight: 700; color: #2f6fb0; margin-bottom: 4px; text-align: center; }
+.lobbyModeBox {
+  margin: 0 auto 10px;
+  padding: 8px 12px;
+  border-radius: 16px;
+  background: #f4faff;
+  border: 2px solid #d8e9f8;
+  color: #3a4f6b;
+  font-size: 13px;
+  font-weight: 600;
+}
+.lobbyModeOptions { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+.lobbyModeOptions button { width: auto; margin: 0; padding: 7px 10px; font-size: 12px; border-radius: 10px; box-shadow: none; }
+.lobbyModeOptions button.active { background: linear-gradient(180deg, #ffd980, #ffb648); }
+
+.passivePanel { max-width: 760px; }
+.passiveTimer {
+  margin: 8px auto 14px;
+  width: 54px; height: 54px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 26px; font-weight: 800;
+  color: #fff; background: #ff9f43;
+  box-shadow: 0 5px 0 #d9902a;
+}
+.passiveCards { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 12px; }
+.passiveCard {
+  cursor: pointer;
+  border: 3px solid #e2eef8;
+  border-radius: 18px;
+  background: #f7fbff;
+  padding: 14px 12px;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.passiveCard:hover { transform: translateY(-3px); border-color: #6ec4ff; box-shadow: 0 10px 20px rgba(63,160,240,0.2); }
+.passiveCard.selected { border-color: #ffb648; background: #fff5dc; box-shadow: 0 0 0 4px rgba(255,182,72,0.25); }
+.passiveCard .emoji { font-size: 38px; }
+.passiveCard .name { font-family: 'Baloo 2', sans-serif; font-weight: 800; color: #2f6fb0; font-size: 18px; }
+.passiveCard .desc { font-size: 12px; color: #5a6f8b; line-height: 1.35; }
+
+.skillPanel {
+  position: absolute; left: 12px; top: 44px; width: 275px; z-index: 5;
+  background: rgba(255,255,255,0.93); border: 3px solid #fff; border-radius: 16px;
+  padding: 10px 12px; box-shadow: 0 8px 20px rgba(30,60,100,0.22);
+  max-height: 48vh; overflow-y: auto; pointer-events: auto;
+}
+.skillPanelTitle { font-family: 'Baloo 2', sans-serif; font-size: 17px; font-weight: 800; color: #2f6fb0; text-align: center; margin-bottom: 8px; }
+.skillRow { display: grid; grid-template-columns: 15px 1fr 32px 32px; align-items: center; gap: 7px; padding: 6px 7px; border-radius: 11px; background: #f0f7fd; margin-bottom: 5px; font-size: 12px; font-weight: 600; color: #3a4f6b; }
+.skillName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skillIcon { font-size: 18px; text-align: center; cursor: help; }
+.skillIcon.empty { opacity: .35; }
+.skillLocked { color: #e67e22; font-size: 11px; }
+
+.eventLog {
+  position: absolute; right: 18px; bottom: 18px; width: 330px; z-index: 5;
+  background: rgba(20,32,52,0.82); color: #eef8ff;
+  border: 2px solid rgba(255,255,255,0.45); border-radius: 16px;
+  padding: 10px 12px; box-shadow: 0 8px 20px rgba(0,0,0,0.22);
+  max-height: 220px; overflow-y: auto; pointer-events: auto;
+}
+.eventLogTitle { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 15px; color: #ffd980; margin-bottom: 5px; text-align: center; }
+.eventLogRow { font-size: 11.5px; line-height: 1.35; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.12); }
+.eventLogRow:first-of-type { border-top: none; }
+
+.useActiveBtn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, #b983ff, #8357db);
+  box-shadow: 0 4px 0 #6642af, 0 8px 16px rgba(131,87,219,0.25);
+}
+.useActiveBtn.used { opacity: .55; background: #99a; box-shadow: none; }
+.cardHeader.skillActive { background: linear-gradient(135deg, #efe3ff, #dff4ff); border-color: #c9b3ff; }
+
+.angelFlash {
+  animation: angelPulse 1s ease-in-out 3;
+}
+@keyframes angelPulse {
+  0% { box-shadow: 0 0 0 rgba(255,224,130,0); }
+  50% { box-shadow: 0 0 28px rgba(255,224,130,0.9); }
+  100% { box-shadow: 0 0 0 rgba(255,224,130,0); }
+}
+
+@media (max-width: 780px) {
+  .passiveCards { grid-template-columns: 1fr; }
+  .skillPanel { width: 240px; max-height: 36vh; }
+  .eventLog { width: 290px; max-height: 160px; }
+  #hud .centerAnnouncement { font-size: 23px; padding: 14px 18px; min-width: 230px; }
+  #hud .orderPanel { width: 290px; }
+}

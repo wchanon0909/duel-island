@@ -29,6 +29,11 @@
       </div>
       <div id="createForm" class="hidden">
         <input type="text" id="nameCreate" placeholder="ชื่อของคุณ" maxlength="16">
+        <div class="modePicker">
+          <div class="modeTitle">เลือกโหมดเกม</div>
+          <label><input type="radio" name="gameMode" value="classic" checked> Classic mode — ยิงกันธรรมดา</label>
+          <label><input type="radio" name="gameMode" value="skill"> Skill mode — Passive + Active Skill</label>
+        </div>
         <button id="btnCreate">สร้างห้องใหม่</button>
       </div>
       <div class="err" id="homeErr"></div>
@@ -40,6 +45,7 @@
     <div class="panel">
       <h1>ห้องรอผู้เล่น</h1>
       <div class="roomCode" id="lobbyCode">----</div>
+      <div id="lobbyModeBox" class="lobbyModeBox"></div>
       <ul id="lobbyPlayers"></ul>
       <div class="hatPickerLabel">เลือกหมวกฮาๆ ของคุณ</div>
       <div id="hatPicker" class="hatPicker"></div>
@@ -62,14 +68,28 @@
     <div class="instructions" id="instructions">WASD เดิน • เมาส์หมุนทิศเลเซอร์ • กด SPACE ยืนยันพร้อมยิง</div>
     <button id="btnEndGame" class="endGameBtn hidden">🏁 จบเกม → ล็อบบี้</button>
     <div class="banner hidden" id="banner"></div>
+    <div class="centerAnnouncement hidden" id="centerAnnouncement"></div>
     <div class="eliminatedList hidden" id="eliminatedList"></div>
     <div id="orderPanel" class="orderPanel hidden">
       <div class="orderPanelTitle" id="orderPanelTitle">🎲 ลำดับการยิง</div>
       <div id="cardHeader" class="cardHeader hidden"></div>
       <ul id="orderList"></ul>
     </div>
+    <div id="skillPanel" class="skillPanel hidden"></div>
+    <div id="eventLog" class="eventLog hidden"></div>
     <div id="cardLog" class="leftPanel hidden"></div>
     <div id="powerLog" class="leftPanel powerLog hidden"></div>
+  </div>
+
+  <!-- PASSIVE SKILL SELECT -->
+  <div id="passiveOverlay" class="screen hidden">
+    <div class="panel passivePanel">
+      <h1>เลือก Passive Skill</h1>
+      <div class="subtitle">เลือก 1 สกิลก่อนเริ่มเกม ถ้าไม่เลือกใน 15 วินาที ระบบจะสุ่มให้</div>
+      <div id="passiveTimer" class="passiveTimer">15</div>
+      <div id="passiveCards" class="passiveCards"></div>
+      <div id="passiveStatus" class="err"></div>
+    </div>
   </div>
 
   <!-- GAME OVER -->

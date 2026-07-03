@@ -34,18 +34,27 @@ const BACKS = [
 ];
 let selfBack = 'none';
 
-// ---------- Special cards (dealt one per round) ----------
-const CARDS = [
-  { id: 'gobig', emoji: '🐘', name: 'Go Big', desc: 'ขยายร่าง +70% โดนง่ายขึ้น แต่กระสุนก็ใหญ่ขึ้น (ลุ้น 10% ใหญ่ 200%)' },
-  { id: 'gosmall', emoji: '🐜', name: 'Go Small', desc: 'ย่อร่างเล็กลง โดนยากขึ้น (ลุ้น 10% เล็กสุด ๆ)' },
-  { id: 'divine', emoji: '😇', name: 'The Divine', desc: 'กระสุนแตกเป็นแฉก 30° ยิงออกสองนัด' },
-  { id: 'bounce', emoji: '🎾', name: 'The Bounce', desc: 'กระสุนเด้งได้ 1 ครั้งแบบสุ่ม' },
-  { id: 'thunder', emoji: '⚡', name: 'The Thunder', desc: '50% ปืนขัดข้อง / 50% ปล่อยสายฟ้ารอบตัว 1 บล็อก' }
+// ---------- Skill System V2 ----------
+const PASSIVE_SKILLS = [
+  { id: 'bounce', emoji: '🎾', name: 'Bounce Bullet', desc: 'กระสุนปกติเด้งกำแพง/ของแข็งได้ 1 ครั้ง ไม่เด้งจากผู้เล่น' },
+  { id: 'dodge', emoji: '💨', name: 'Dodge', desc: 'หลบกระสุนได้ 1 ครั้งตลอดทั้งเกม กระสุนจะวิ่งผ่านไป' },
+  { id: 'secondchance', emoji: '🔁', name: 'Second Chance', desc: 'โดนยิงแล้วถอยหลัง 3 ช่อง ถ้าตกแมพจะตาย ถ้ายังไม่ยิงจะยิงสวน' }
 ];
-const cardById = id => CARDS.find(c => c.id === id) || null;
-let roster = [];        // alive players this round (for the card target picker)
-let myCard = null;      // the card I was dealt this round
-let myCardTarget = null; // whom I aimed my card at
+const ACTIVE_SKILLS = [
+  { id: 'shotgun', emoji: '🔫', name: 'Shotgun', desc: 'ยิงกระสุนออกเป็นรูปกรวย ระยะไม่เกิน 3 ช่อง' },
+  { id: 'sniper', emoji: '🎯', name: 'Sniper', desc: 'ยิงตรงระยะไกลและแม่นขึ้น แต่ Dodge/Shield ยังป้องกันได้' },
+  { id: 'taser', emoji: '⚡', name: 'Taser', desc: 'ถ้าโดนเป้าหมาย รอบถัดไปเป้าหมายจะเดินไม่ได้' },
+  { id: 'foresight', emoji: '👁️', name: 'Foresight', desc: 'ใช้เทิร์นนี้เพื่อหลบกระสุนนัดแรก แต่จะไม่ยิงในรอบนี้' },
+  { id: 'shield', emoji: '🛡️', name: 'Shield', desc: 'เมื่อกดใช้ รอบนั้นจะรับกระสุนได้โดยไม่ตาย 1 ครั้ง' }
+];
+const passiveById = id => PASSIVE_SKILLS.find(c => c.id === id) || null;
+const activeById = id => ACTIVE_SKILLS.find(c => c.id === id) || null;
+let currentMode = 'classic';
+let roster = [];
+let myPassiveSkill = null;
+let myActiveSkill = null;
+let myActiveUsed = null;
+let myMoveLocked = false;
 
 // mirrors server.js timing constants for the sequential fire animation
 const SHOT_START_DELAY = 4200;
@@ -53,6 +62,22 @@ const SHOT_INTERVAL = 1300;
 const BULLET_SPEED = 16; // units/sec — medium travel speed for the bullet ball
 
 const $ = id => document.getElementById(id);
+let centerAnnouncementTimer = null;
+
+function showCenterAnnouncement(message, type = 'skill', duration = 2600) {
+  const el = $('centerAnnouncement');
+  if (!el) return;
+  clearTimeout(centerAnnouncementTimer);
+  el.textContent = message;
+  el.className = `centerAnnouncement ${type}`;
+  // force reflow so the pop animation restarts even for back-to-back messages
+  el.getBoundingClientRect();
+  el.classList.add('show');
+  centerAnnouncementTimer = setTimeout(() => {
+    el.classList.remove('show');
+    el.classList.add('hidden');
+  }, duration);
+}
 
 const hatPickerEl = $('hatPicker');
 HATS.forEach(h => {
@@ -99,7 +124,8 @@ function setTab(which) {
 
 $('btnCreate').addEventListener('click', () => {
   const name = $('nameCreate').value.trim() || 'Player';
-  socket.emit('createRoom', { name });
+  const mode = document.querySelector('input[name="gameMode"]:checked')?.value || 'classic';
+  socket.emit('createRoom', { name, mode });
 });
 $('btnJoin').addEventListener('click', () => {
   const code = $('roomCodeInput').value.trim().toUpperCase();
@@ -127,12 +153,30 @@ socket.on('joined', data => {
 socket.on('roomUpdate', data => {
   roomCode = data.code;
   isHost = data.hostId === selfId;
+  currentMode = data.mode || 'classic';
   if (data.state === 'lobby') {
     revealActive = false;
     spectating = false;
     $('btnEndGame').classList.add('hidden');
+    $('passiveOverlay').classList.add('hidden');
+    $('skillPanel').classList.add('hidden');
+    $('eventLog').classList.add('hidden');
     showScreen('lobby');
     $('lobbyCode').textContent = data.code;
+    const modeBox = $('lobbyModeBox');
+    if (modeBox) {
+      const modeLabel = currentMode === 'skill' ? 'Skill mode — Passive + Active Skill' : 'Classic mode — ยิงกันธรรมดา';
+      modeBox.innerHTML = `<div>โหมดปัจจุบัน: <b>${modeLabel}</b></div>` + (isHost ? `
+        <div class="lobbyModeOptions">
+          <button class="${currentMode === 'classic' ? 'active' : ''}" data-mode="classic">Classic</button>
+          <button class="${currentMode === 'skill' ? 'active' : ''}" data-mode="skill">Skill</button>
+        </div>` : '');
+      if (isHost) {
+        modeBox.querySelectorAll('button[data-mode]').forEach(btn => {
+          btn.addEventListener('click', () => socket.emit('setMode', { mode: btn.dataset.mode }));
+        });
+      }
+    }
     const list = $('lobbyPlayers');
     list.innerHTML = '';
     data.players.forEach(p => {
@@ -140,6 +184,8 @@ socket.on('roomUpdate', data => {
         selfHat = p.hat || 'none'; updateHatPickerUI();
         selfBack = p.back || 'none'; updateBackPickerUI();
         selfAlive = true;
+        myPassiveSkill = p.passiveSkill || null;
+        myActiveSkill = p.activeSkill || null;
       }
       const hatEmoji = (HATS.find(h => h.id === p.hat) || HATS[0]).emoji;
       const backEmoji = (BACKS.find(b => b.id === p.back) || BACKS[0]).emoji;
@@ -176,6 +222,133 @@ socket.on('gameOver', ({ winnerId, winnerName }) => {
     $('gameOverSubtitle').textContent = 'ทุกคนยิงโดนกันหมด';
   }
   $('btnPlayAgain').classList.toggle('hidden', !isHost);
+});
+
+
+// ---------- Skill UI ----------
+function skillInfo(type, id) {
+  return type === 'passive' ? passiveById(id) : activeById(id);
+}
+
+function renderSkillPanel(players = []) {
+  const el = $('skillPanel');
+  if (!el) return;
+  if (currentMode !== 'skill' || !players.length) { el.classList.add('hidden'); return; }
+  let html = '<div class="skillPanelTitle">🧩 Skill Table</div>';
+  players.forEach(p => {
+    const passive = passiveById(p.passiveSkill);
+    const active = activeById(p.activeSkill);
+    html += `<div class="skillRow" data-id="${p.id}">
+      <span class="orderDot" style="background:${p.color}"></span>
+      <span class="skillName">${escapeHtml(p.name)}${p.id === selfId ? ' (คุณ)' : ''}${p.moveLocked ? ' <span class="skillLocked">ล็อกเดิน</span>' : ''}</span>
+      <span class="skillIcon ${passive ? '' : 'empty'}" title="${passive ? passive.name + ' — ' + passive.desc : 'ไม่มี Passive'}">${passive ? passive.emoji : '–'}</span>
+      <span class="skillIcon ${active ? '' : 'empty'}" title="${active ? active.name + ' — ' + active.desc : 'ไม่มี Active'}">${active ? active.emoji : '–'}</span>
+    </div>`;
+  });
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+function renderEventLog(events = []) {
+  const el = $('eventLog');
+  if (!el) return;
+  if (!events.length) { el.classList.add('hidden'); return; }
+  el.innerHTML = '<div class="eventLogTitle">📜 Event Log</div>' + events.map(e =>
+    `<div class="eventLogRow">${escapeHtml(e.text || '')}</div>`
+  ).join('');
+  el.classList.remove('hidden');
+}
+
+socket.on('eventLogUpdate', ({ events }) => renderEventLog(events || []));
+
+socket.on('skillState', data => {
+  currentMode = data.mode || currentMode;
+  renderSkillPanel(data.players || []);
+  const me = (data.players || []).find(p => p.id === selfId);
+  if (me) {
+    myPassiveSkill = me.passiveSkill || myPassiveSkill;
+    myActiveSkill = me.activeSkill || null;
+    myMoveLocked = !!me.moveLocked;
+    if (placing && !spectating) buildActivePanel();
+  }
+});
+
+let passiveSelectEndsAt = 0;
+let passiveTimerHandle = null;
+let passiveChosen = null;
+
+function showPassiveOverlay(skills) {
+  passiveChosen = null;
+  const overlay = $('passiveOverlay');
+  const cards = $('passiveCards');
+  cards.innerHTML = '';
+  skills.forEach(id => {
+    const sk = passiveById(id);
+    if (!sk) return;
+    const card = document.createElement('div');
+    card.className = 'passiveCard';
+    card.innerHTML = `<div class="emoji">${sk.emoji}</div><div class="name">${sk.name}</div><div class="desc">${sk.desc}</div>`;
+    card.addEventListener('click', () => {
+      if (passiveChosen) return;
+      passiveChosen = id;
+      card.classList.add('selected');
+      $('passiveStatus').textContent = `เลือก ${sk.name} แล้ว รอผู้เล่นคนอื่น...`;
+      socket.emit('setPassiveSkill', { skillId: id });
+      [...cards.children].forEach(c => { if (c !== card) c.style.opacity = '0.45'; });
+    });
+    cards.appendChild(card);
+  });
+  $('passiveStatus').textContent = '';
+  overlay.classList.remove('hidden');
+}
+
+function updatePassiveTimer() {
+  const remain = Math.max(0, passiveSelectEndsAt - Date.now());
+  $('passiveTimer').textContent = Math.ceil(remain / 1000);
+  if (remain <= 0) clearInterval(passiveTimerHandle);
+}
+
+socket.on('passiveSelectStart', data => {
+  currentMode = 'skill';
+  showScreen('game');
+  $('hud').classList.add('hidden');
+  $('gameCanvas').classList.add('hidden');
+  showPassiveOverlay(data.skills || PASSIVE_SKILLS.map(s => s.id));
+  passiveSelectEndsAt = data.endsAt || (Date.now() + 15000);
+  clearInterval(passiveTimerHandle);
+  updatePassiveTimer();
+  passiveTimerHandle = setInterval(updatePassiveTimer, 250);
+});
+
+socket.on('passiveConfirmed', ({ skillId }) => {
+  const sk = passiveById(skillId);
+  if (sk) $('passiveStatus').textContent = `เลือก ${sk.name} แล้ว รอผู้เล่นคนอื่น...`;
+});
+
+socket.on('passiveReveal', data => {
+  clearInterval(passiveTimerHandle);
+  $('passiveOverlay').classList.add('hidden');
+  renderSkillPanel(data.players || []);
+});
+
+socket.on('yourSkillState', data => {
+  myPassiveSkill = data.passiveSkill || null;
+  myActiveSkill = data.activeSkill || null;
+  myActiveUsed = null;
+  myMoveLocked = !!data.moveLocked;
+  if (placing && !spectating) buildActivePanel();
+});
+
+socket.on('activeUsedConfirmed', ({ skillId }) => {
+  myActiveUsed = skillId;
+  myActiveSkill = null;
+  buildActivePanel();
+});
+
+socket.on('activeSkillUsed', data => {
+  const skill = activeById(data.skillId);
+  const skillName = data.skillName || (skill ? skill.name : 'Active Skill');
+  showCenterAnnouncement(`${skill ? skill.emoji + ' ' : ''}${data.playerName || 'ผู้เล่น'} ใช้ ${skillName}!`, 'skill', 2600);
 });
 
 function escapeHtml(s) {
@@ -547,64 +720,24 @@ function getBloodTexture() {
 
 let fxSprites = [], fxBeams = [], fxParticles = [], revealDecals = [], fxBullets = [], fxLabels = [];
 
-// hidden-power icons + a short label that floats up above a player when a power fires
-const POWER_EMOJI = { matrix: '🕶️', drunken: '🥴', revenger: '👻', fool: '🤡', man: '💪' };
-const POWER_DESC = {
-  matrix: 'The Matrix — หลบกระสุนนัดแรกของเกม',
-  drunken: 'The Drunken — 33% ยิงออกด้านหลัง',
-  revenger: 'The Revenger — ตายแล้วยิงสุ่ม 1 นัด',
-  fool: 'The Fool — ยิงโดนใครปิดพลังคนนั้น',
-  man: 'The MAN — โดนยิงด้านหลังกระเด็นสุ่ม'
+// short labels that float above players when a skill fires
+const SKILL_LABEL = {
+  bounce: '🎾 BOUNCE!',
+  dodge: '💨 DODGE!',
+  secondchance: '🔁 SECOND CHANCE!',
+  shotgun: '🔫 SHOTGUN!',
+  sniper: '🎯 SNIPER!',
+  taser: '⚡ TASER!',
+  foresight: '👁️ FORESIGHT!',
+  shield: '🛡️ SHIELD!'
 };
-let zoomFocus = null; // { x, z, until } — pulls the reveal camera in on a triggered power
-let playerInfo = new Map(); // id -> { name, color }
-let revealedPowers = new Map(); // id -> powerId, kept on the left panel until the match ends
+let zoomFocus = null;
+let playerInfo = new Map();
+let revealedPowers = new Map(); // kept only for backward compatibility with old UI; hidden in V2
 
-// a hidden power just showed itself — remember it for the persistent left panel
-function revealPower(id, powerId) {
-  if (!powerId || powerId === 'none') return;
-  if (revealedPowers.get(id) === powerId) return;
-  revealedPowers.set(id, powerId);
-  renderPowerLog();
-}
-
-function renderPowerLog() {
-  const el = $('powerLog');
-  if (!el) return;
-  if (revealedPowers.size === 0) { el.classList.add('hidden'); return; }
-  let html = '<div class="logTitle">⚡ พลังแฝงที่เปิดแล้ว</div>';
-  revealedPowers.forEach((pw, id) => {
-    const info = playerInfo.get(id) || { name: '?', color: '#888' };
-    html += `<div class="logRow"><span class="orderDot" style="background:${info.color}"></span>
-      <span class="logName">${escapeHtml(info.name)}</span></div>
-      <div class="logDesc">${POWER_EMOJI[pw] || ''} ${POWER_DESC[pw] || ''}</div>`;
-  });
-  el.innerHTML = html;
-  el.classList.remove('hidden');
-}
-
-// which cards were played ON each player this round (left panel, reset every round)
-function buildCardLog(data) {
-  const el = $('cardLog');
-  if (!el) return;
-  const byTarget = new Map();
-  (data.cards || []).forEach(c => {
-    if (!byTarget.has(c.targetId)) byTarget.set(c.targetId, []);
-    byTarget.get(c.targetId).push(c.card);
-  });
-  if (byTarget.size === 0) { el.classList.add('hidden'); return; }
-  let html = '<div class="logTitle">🃏 การ์ดที่โดนใส่รอบนี้</div>';
-  data.players.forEach(p => {
-    const list = byTarget.get(p.id);
-    if (!list || !list.length) return;
-    const emojis = list.map(cid => (cardById(cid) || {}).emoji || '').join(' ');
-    html += `<div class="logRow"><span class="orderDot" style="background:${p.color}"></span>
-      <span class="logName">${escapeHtml(p.name)}</span>
-      <span class="logCards">${emojis}</span></div>`;
-  });
-  el.innerHTML = html;
-  el.classList.remove('hidden');
-}
+function revealPower() {}
+function renderPowerLog() { const el = $('powerLog'); if (el) el.classList.add('hidden'); }
+function buildCardLog() { const el = $('cardLog'); if (el) el.classList.add('hidden'); }
 
 function floatLabel(x, z, y, text, color) {
   const cvs = document.createElement('canvas');
@@ -907,28 +1040,43 @@ socket.on('roundStart', data => {
   showScreen('game');
   $('btnEndGame').classList.toggle('hidden', !isHost);
   $('banner').classList.add('hidden');
+  $('centerAnnouncement').classList.add('hidden');
+  $('centerAnnouncement').classList.remove('show');
   $('eliminatedList').classList.add('hidden');
   $('orderPanel').classList.add('hidden');
-  clearInterval(orderShuffleTimer);
+  clearTimeout(orderShuffleTimer);
   roundEndsAt = data.endsAt;
 
-  // fresh card for the round; roster used for the target picker
+  currentMode = data.mode || currentMode;
+  $('passiveOverlay').classList.add('hidden');
+  $('hud').classList.remove('hidden');
+  $('gameCanvas').classList.remove('hidden');
   roster = data.roster || [];
-  myCardTarget = null;
   roster.forEach(pl => playerInfo.set(pl.id, { name: pl.name, color: pl.color }));
-  $('cardLog').classList.add('hidden'); // per-round card list only shows during the reveal
-  if (data.round === 1) { revealedPowers.clear(); renderPowerLog(); } // new match -> clear power log
+  renderSkillPanel(roster);
+  $('cardLog').classList.add('hidden');
+  renderPowerLog();
 
   if (spectating) {
-    // dead players don't pick cards — keep the side panel hidden during placement
     $('orderPanel').classList.add('hidden');
     spectateCamTarget.set(0, data.islandSize * 0.85 + 6, data.islandSize * 0.6 + 4);
     $('instructions').textContent = '👻 คุณตกรอบแล้ว กำลังดูผู้เล่นที่เหลือหาที่กำบัง...';
   } else {
-    $('instructions').textContent = 'WASD เดิน • เมาส์เล็งทิศ • คลิกชื่อด้านขวาเพื่อใช้การ์ด • SPACE ยืนยัน';
+    const me = roster.find(p => p.id === selfId);
+    myPassiveSkill = me ? me.passiveSkill : myPassiveSkill;
+    myActiveSkill = me ? me.activeSkill : myActiveSkill;
+    myMoveLocked = !!(me && me.moveLocked);
+    $('instructions').textContent = myMoveLocked
+      ? '⚡ รอบนี้โดน Taser: เดินไม่ได้ แต่ยังหมุนเล็ง/ยิง/ใช้สกิลได้ • SPACE ยืนยัน'
+      : 'WASD เดิน • เมาส์เล็งทิศ • กด Active Skill ได้ถ้ามี • SPACE ยืนยัน';
     // find own color from last roomUpdate players list (fallback)
-    selfPos.set((Math.random() - 0.5) * 1, 0, (Math.random() - 0.5) * 1);
-    selfAngle = Math.random() * Math.PI * 2;
+    if (me && typeof me.x === 'number') {
+      selfPos.set(me.x, 0, me.z);
+      selfAngle = me.angle || 0;
+    } else {
+      selfPos.set((Math.random() - 0.5) * 1, 0, (Math.random() - 0.5) * 1);
+      selfAngle = Math.random() * Math.PI * 2;
+    }
 
     selfMesh = makePlayerMesh(selfColor, true, selfHat, selfBack);
     scene.add(selfMesh);
@@ -936,19 +1084,11 @@ socket.on('roundStart', data => {
     selfLaser.material.opacity = 0.5;
     scene.add(selfLaser);
     updateReadyUI();
-    buildCardPicker();
+    buildActivePanel();
   }
 });
 
-socket.on('yourCard', data => {
-  myCard = data.card;
-  if (placing && !spectating) updateCardHeader();
-});
-
-socket.on('cardTargetSet', data => {
-  myCardTarget = data.targetId;
-  refreshPickHighlight();
-});
+// Old card events are intentionally unused in Skill System V2.
 
 // track color for self via roomUpdate
 socket.on('roomUpdate', data => {
@@ -969,7 +1109,7 @@ function updatePlacement(dt) {
     if (keys.s) mz += 1;
     if (keys.a) mx -= 1;
     if (keys.d) mx += 1;
-    if (mx || mz) {
+    if ((mx || mz) && !myMoveLocked) {
       const len = Math.hypot(mx, mz);
       selfPos.x += (mx / len) * speed * dt;
       selfPos.z += (mz / len) * speed * dt;
@@ -1036,53 +1176,50 @@ function clearRevealMeshes() {
   revealActive = false;
 }
 
-// ---------- Card picker (placement phase) ----------
-let cardRowMap = new Map();
+// ---------- Active skill panel (placement phase) ----------
+function updateCardHeader() { buildActivePanel(); }
+function refreshPickHighlight() {}
 
-function updateCardHeader() {
-  const el = $('cardHeader');
-  const c = cardById(myCard);
-  if (!c) { el.classList.add('hidden'); return; }
-  el.classList.remove('hidden');
-  el.innerHTML = `<div class="cardEmoji">${c.emoji}</div>
-    <div class="cardName">${c.name}</div>
-    <div class="cardDesc">${c.desc}</div>
-    <div class="cardHint">คลิกชื่อด้านล่างเพื่อเลือกเป้า • ไม่เลือก = สุ่มให้</div>`;
-}
-
-function refreshPickHighlight() {
-  cardRowMap.forEach((li, id) => {
-    const picked = id === myCardTarget;
-    li.classList.toggle('picked', picked);
-    li.querySelector('.pickMark').textContent = picked ? '🎯' : '';
-  });
-}
-
-function buildCardPicker() {
+function buildActivePanel() {
+  const panel = $('orderPanel');
   const listEl = $('orderList');
+  const header = $('cardHeader');
+  if (!placing || spectating || currentMode !== 'skill') {
+    panel.classList.add('hidden');
+    header.classList.add('hidden');
+    return;
+  }
   listEl.innerHTML = '';
-  cardRowMap.clear();
-  clearInterval(orderShuffleTimer);
-  $('orderPanelTitle').textContent = '🃏 การ์ดรอบนี้';
-  updateCardHeader();
-  roster.forEach(pl => {
-    const li = document.createElement('li');
-    li.className = 'orderRow pickRow';
-    li.innerHTML = `<span class="orderDot" style="background:${pl.color}"></span>
-      <span class="orderName">${escapeHtml(pl.name)}${pl.id === selfId ? ' (คุณ)' : ''}</span>
-      <span class="pickMark"></span>`;
-    li.addEventListener('click', () => {
-      if (!placing || selfReady) return;
-      myCardTarget = pl.id;
-      socket.emit('useCard', { targetId: pl.id });
-      refreshPickHighlight();
-    });
-    cardRowMap.set(pl.id, li);
-    listEl.appendChild(li);
+  clearTimeout(orderShuffleTimer);
+  $('orderPanelTitle').textContent = '✨ Active Skill';
+  const active = activeById(myActiveSkill);
+  if (!active) {
+    header.classList.remove('hidden');
+    header.classList.add('skillActive');
+    header.innerHTML = `<div class="cardEmoji">–</div>
+      <div class="cardName">ยังไม่มี Active Skill</div>
+      <div class="cardDesc">รอ Angel Blessing หลังจบรอบ เพื่อรับสกิลแบบสุ่ม</div>`;
+    panel.classList.remove('hidden');
+    return;
+  }
+  header.classList.remove('hidden');
+  header.classList.add('skillActive');
+  const used = myActiveUsed === active.id;
+  header.innerHTML = `<div class="cardEmoji">${active.emoji}</div>
+    <div class="cardName">${active.name}</div>
+    <div class="cardDesc">${active.desc}</div>
+    <button id="btnUseActive" class="useActiveBtn ${used ? 'used' : ''}" ${used || selfReady ? 'disabled' : ''}>${used ? 'ใช้แล้วในรอบนี้' : 'กดใช้ Active Skill'}</button>`;
+  const btn = $('btnUseActive');
+  if (btn) btn.addEventListener('click', () => {
+    if (!placing || selfReady || !myActiveSkill) return;
+    myActiveUsed = myActiveSkill;
+    socket.emit('useActiveSkill', { skillId: myActiveSkill });
+    buildActivePanel();
   });
-  refreshPickHighlight();
-  $('orderPanel').classList.remove('hidden');
+  panel.classList.remove('hidden');
 }
+
+function buildCardPicker() { buildActivePanel(); }
 
 // ---------- Firing order table ----------
 let orderRowMap = new Map();
@@ -1117,7 +1254,7 @@ function buildOrderTable(data) {
   const listEl = $('orderList');
   listEl.innerHTML = '';
   orderRowMap.clear();
-  clearInterval(orderShuffleTimer);
+  clearTimeout(orderShuffleTimer);
   $('orderPanelTitle').textContent = '🎲 ลำดับการยิง';
   $('cardHeader').classList.add('hidden');
 
@@ -1125,12 +1262,12 @@ function buildOrderTable(data) {
   data.shots.forEach(s => {
     const shooter = data.players.find(p => p.id === s.shooterId);
     if (!shooter) return;
-    const card = cardById(shooter.card);
+    const active = activeById(s.activeUsed || shooter.activeUsed);
     const li = document.createElement('li');
     li.className = 'orderRow';
     li.innerHTML = `<span class="orderDot" style="background:${shooter.color}"></span>
-      <span class="orderName">${escapeHtml(shooter.name)}</span>
-      <span class="orderCard" title="${card ? card.name : ''}">${card ? card.emoji : ''}</span>
+      <span class="orderName">${escapeHtml(shooter.name)}${s.counter ? ' ↩' : ''}</span>
+      <span class="orderCard" title="${active ? active.name : ''}">${active ? active.emoji : ''}</span>
       <span class="orderResult"></span>`;
     orderRowMap.set(s.shooterId, { li, resultEl: li.querySelector('.orderResult') });
   });
@@ -1139,29 +1276,37 @@ function buildOrderTable(data) {
   shuffleIds(trueOrder.slice()).forEach(id => listEl.appendChild(orderRowMap.get(id).li));
   $('orderPanel').classList.remove('hidden');
 
-  // shuffle rows around a few times, then lock into the real firing order
-  // just before the first shot goes off
+  // shuffle fast at first, then gradually slow down before settling on the true order
+  // just before the first shot goes off. This feels like a real spinning roll.
   if (trueOrder.length > 1) {
-    const stepMs = 300;
-    const steps = Math.max(1, Math.floor((SHOT_START_DELAY - 350) / stepMs) - 1);
-    let step = 0;
-    clearInterval(orderShuffleTimer);
-    orderShuffleTimer = setInterval(() => {
-      step++;
-      if (step >= steps) {
-        clearInterval(orderShuffleTimer);
-        reorderRows(trueOrder); // settle on the real order
-      } else {
-        reorderRows(shuffleIds(trueOrder.slice()));
+    const start = performance.now();
+    const settleAt = Math.max(900, SHOT_START_DELAY - 450);
+    const spin = () => {
+      const elapsed = performance.now() - start;
+      const progress = Math.min(1, elapsed / settleAt);
+      if (progress >= 1) {
+        orderRowMap.forEach(row => row.li.classList.remove('rolling'));
+        reorderRows(trueOrder);
+        orderShuffleTimer = null;
+        return;
       }
-    }, stepMs);
+      orderRowMap.forEach(row => row.li.classList.add('rolling'));
+      reorderRows(shuffleIds(trueOrder.slice()));
+      const nextDelay = 55 + Math.pow(progress, 2.4) * 430;
+      orderShuffleTimer = setTimeout(spin, nextDelay);
+    };
+    clearTimeout(orderShuffleTimer);
+    orderShuffleTimer = setTimeout(spin, 55);
   }
 }
 
 function shotResultIcon(shot) {
+  if (shot.type === 'foresight') return '👁️';
   if (shot.type === 'skip' || shot.skipped) return '💀';
+  if ((shot.taserLocks || []).length) return '⚡';
   const hits = (shot.hitIds || []).length;
-  if (shot.type === 'thunder') return shot.jammed ? '⚡🚫' : (hits ? '⚡💥' : '⚡');
+  if (shot.type === 'shotgun') return hits ? '🔫🎯' : '🔫❌';
+  if (shot.type === 'sniper') return hits ? '🎯💥' : '🎯❌';
   return hits ? (hits > 1 ? '🎯🎯' : '🎯') : '❌';
 }
 
@@ -1187,8 +1332,9 @@ socket.on('roundResult', data => {
   clearSpectatorMeshes();
 
   data.players.forEach(p => playerInfo.set(p.id, { name: p.name, color: p.color }));
-  buildCardLog(data);       // which cards were played on whom this round (left)
-  renderPowerLog();         // keep the revealed-powers list up to date (left)
+  renderSkillPanel(data.skillState || data.players);
+  buildCardLog(data);
+  renderPowerLog();
 
   data.players.forEach(p => {
     const size = p.size || 1;
@@ -1228,7 +1374,16 @@ socket.on('roundResult', data => {
     });
     const banner = $('banner');
     const elimEl = $('eliminatedList');
-    if (names.length) {
+    if (data.angelGrant) {
+      const grantPlayer = data.players.find(p => p.id === data.angelGrant.playerId);
+      const grantSkill = activeById(data.angelGrant.skillId);
+      const grantName = grantPlayer ? grantPlayer.name : (data.angelGrant.playerName || 'ผู้เล่น');
+      const skillName = data.angelGrant.skillName || (grantSkill ? grantSkill.name : 'Active Skill');
+      banner.textContent = `😇 Angel Blessing: ${grantName} ได้รับ ${skillName}`;
+      showCenterAnnouncement(`😇 ${grantName} ได้รับ ${grantSkill ? grantSkill.emoji + ' ' : ''}${skillName}!`, 'angel', 3600);
+      $('skillPanel').classList.add('angelFlash');
+      setTimeout(() => $('skillPanel').classList.remove('angelFlash'), 3200);
+    } else if (names.length) {
       banner.textContent = `💥 ตกรอบ: ${names.join(', ')}`;
     } else {
       banner.textContent = '😮 ไม่มีใครโดนยิงรอบนี้';
@@ -1286,39 +1441,59 @@ function focusOn(entry, ms) {
   zoomFocus = { x: entry.x, z: entry.z, until: revealClock + ms };
 }
 
-// reveal a triggered hidden power: zoom in + a floating label (+ the Fool's fake-out gag)
+// reveal triggered skills: zoom in + a floating label
 function handlePowerEvents(s) {
-  if (s.drunken) {
-    const e = revealMeshMap.get(s.shooterId);
-    if (e) { focusOn(e, 2500); floatLabel(e.x, e.z, 2.5 * e.size, POWER_EMOJI.drunken + ' เมา!', '#ffd36b'); revealPower(s.shooterId, 'drunken'); }
+  const shooter = revealMeshMap.get(s.shooterId);
+  if (shooter && s.activeUsed) {
+    focusOn(shooter, 1600);
+    floatLabel(shooter.x, shooter.z, 2.5 * shooter.size, SKILL_LABEL[s.activeUsed] || s.activeUsed, '#e7d6ff');
   }
-  if (s.revenge) {
-    const e = revealMeshMap.get(s.shooterId);
-    if (e) { focusOn(e, 2600); floatLabel(e.x, e.z, 2.3, POWER_EMOJI.revenger + ' REVENGE!', '#c9b3ff'); revealPower(s.shooterId, 'revenger'); }
+  if (shooter && s.counter) {
+    focusOn(shooter, 1500);
+    floatLabel(shooter.x, shooter.z, 2.4 * shooter.size, '↩ COUNTER!', '#ffd980');
   }
   (s.dodges || []).forEach(id => {
     const e = revealMeshMap.get(id);
     if (!e) return;
-    focusOn(e, 2600);
+    focusOn(e, 2200);
     e.dodgeUntil = revealClock + 1400;
-    floatLabel(e.x, e.z, 2.6 * e.size, POWER_EMOJI.matrix + ' MATRIX!', '#9fe0ff');
-    revealPower(id, 'matrix');
+    floatLabel(e.x, e.z, 2.6 * e.size, '💨 DODGE!', '#9fe0ff');
   });
-  (s.manDeflects || []).forEach(id => {
+  (s.foresightDodges || []).forEach(id => {
     const e = revealMeshMap.get(id);
     if (!e) return;
-    focusOn(e, 2500);
-    floatLabel(e.x, e.z, 2.6 * e.size, POWER_EMOJI.man + ' THE MAN!', '#ffcf7a');
-    revealPower(id, 'man');
+    focusOn(e, 2200);
+    e.dodgeUntil = revealClock + 1400;
+    floatLabel(e.x, e.z, 2.6 * e.size, '👁️ FORESIGHT!', '#d9c5ff');
   });
-  (s.foolGags || []).forEach(g => {
-    const e = revealMeshMap.get(g.victimId);
+  (s.shieldBlocks || []).forEach(b => {
+    const e = revealMeshMap.get(b.id);
     if (!e) return;
-    focusOn(e, 2800);
-    floatLabel(e.x, e.z, 2.6 * e.size, (POWER_EMOJI[g.fakedPower] || '❓') + ' ?!', '#ffffff');
-    setTimeout(() => floatLabel(e.x, e.z, 2.9 * e.size, '🤡👋 โดนหลอก!', '#ff8fd0'), 700);
-    revealPower(s.shooterId, 'fool');       // the shooter is The Fool
-    revealPower(g.victimId, g.fakedPower);  // the victim's real (suppressed) power is now known
+    focusOn(e, 2200);
+    spawnFlash(e.x, 1.1, e.z, 1.5, 0x9fd3ff, 0.5);
+    floatLabel(e.x, e.z, 2.6 * e.size, '🛡️ SHIELD!', '#bfe6ff');
+  });
+  (s.secondChance || []).forEach(sc => {
+    const e = revealMeshMap.get(sc.id);
+    if (!e) return;
+    focusOn(e, 2400);
+    e.mesh.position.set(sc.x, 0, sc.z);
+    e.sprite.position.set(sc.x, 1.7 * e.size + 0.2, sc.z);
+    e.x = sc.x; e.z = sc.z;
+    floatLabel(e.x, e.z, 2.6 * e.size, '🔁 SECOND CHANCE!', '#ffd980');
+  });
+  (s.secondChanceFail || []).forEach(id => {
+    const e = revealMeshMap.get(id);
+    if (!e) return;
+    focusOn(e, 1800);
+    floatLabel(e.x, e.z, 2.6 * e.size, '🔁 ตกแมพ!', '#ff9f9f');
+  });
+  (s.taserLocks || []).forEach(id => {
+    const e = revealMeshMap.get(id);
+    if (!e) return;
+    focusOn(e, 2200);
+    spawnFlash(e.x, 1.0, e.z, 1.4, 0xaad4ff, 0.6);
+    floatLabel(e.x, e.z, 2.6 * e.size, '⚡ STUN!', '#bfe0ff');
   });
 }
 
@@ -1340,19 +1515,8 @@ function triggerShot(s) {
 
   handlePowerEvents(s);
 
-  if (s.type === 'thunder') {
-    if (s.jammed) {
-      spawnFlash(shooterEntry.x, 0.7, shooterEntry.z, 0.6, 0xbfe0ff, 0.3); // gun fizzles
-    } else {
-      spawnLightning(shooterEntry);
-      (s.hitIds || []).forEach(id => setTimeout(() => killVictim(id), 220));
-    }
-    return;
-  }
-
-  // normal / forked / bouncing bullets
   spawnMuzzleFlash(shooterEntry);
-  const bulletR = 0.12 * Math.min(2.2, Math.max(0.6, shooterEntry.size));
+  const bulletR = s.type === 'sniper' ? 0.085 : (s.type === 'shotgun' ? 0.1 : 0.12);
   (s.bullets || []).forEach(b => spawnSegmentBullet(shooterEntry.color, b.segments, bulletR));
 }
 
