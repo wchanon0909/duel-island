@@ -10,11 +10,11 @@ let currentRound = 1;
 
 // ---------- Character customization ----------
 const BODY_SKINS = [
-  { id: 'islander', label: 'ISL', name: 'Islander' },
-  { id: 'robot', label: 'BOT', name: 'Robot' },
-  { id: 'ninja', label: 'NIN', name: 'Ninja' },
-  { id: 'wizard', label: 'WIZ', name: 'Wizard' },
-  { id: 'chicken', label: 'CHK', name: 'Chicken' }
+  { id: 'islander', label: '🌴 Islander', tag: 'ISL', name: 'Islander' },
+  { id: 'robot', label: '🤖 Robot', tag: 'BOT', name: 'Robot' },
+  { id: 'ninja', label: '🥷 Ninja', tag: 'NIN', name: 'Ninja' },
+  { id: 'wizard', label: '🧙 Wizard', tag: 'WIZ', name: 'Wizard' },
+  { id: 'chicken', label: '🐔 Chicken', tag: 'CHK', name: 'Chicken' }
 ];
 const PLAYER_COLORS = [
   '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6',
@@ -151,17 +151,257 @@ function updateColorPickerUI() {
   updateAvatarPreview();
 }
 
+
+// ---------- 2.5D standee character art ----------
+function normalizeHex(hex) {
+  const value = String(hex || '#3498db').trim();
+  return value.startsWith('#') ? value : `#${value}`;
+}
+function shadeHex(hex, amount) {
+  hex = normalizeHex(hex).replace('#', '');
+  if (hex.length === 3) hex = hex.split('').map(ch => ch + ch).join('');
+  const num = parseInt(hex, 16);
+  const clamp = v => Math.max(0, Math.min(255, v));
+  const r = clamp(((num >> 16) & 255) + amount);
+  const g = clamp(((num >> 8) & 255) + amount);
+  const b = clamp((num & 255) + amount);
+  return `rgb(${r},${g},${b})`;
+}
+function drawEllipse(ctx, x, y, rx, ry, fill, stroke = '#20283a', line = 8) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) { ctx.lineWidth = line; ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+function drawRoundRect(ctx, x, y, w, h, r, fill, stroke = '#20283a', line = 8) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) { ctx.lineWidth = line; ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+function drawTriangle(ctx, pts, fill, stroke = '#20283a', line = 8) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  if (stroke) { ctx.lineWidth = line; ctx.strokeStyle = stroke; ctx.stroke(); }
+}
+function drawEye(ctx, x, y, glow = false) {
+  drawEllipse(ctx, x, y, 9, 13, glow ? '#6ee7ff' : '#111827', null);
+  drawEllipse(ctx, x + 3, y - 5, 3, 4, '#ffffff', null);
+}
+function drawSmile(ctx, x, y, w = 34) {
+  ctx.beginPath();
+  ctx.arc(x, y, w / 2, 0.15 * Math.PI, 0.85 * Math.PI);
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#111827';
+  ctx.stroke();
+}
+function drawBackArt(ctx, back, cx, cy) {
+  switch (back) {
+    case 'devilwing':
+      drawTriangle(ctx, [[cx - 58, cy + 18], [cx - 118, cy + 6], [cx - 78, cy + 64]], '#8b1a1a');
+      drawTriangle(ctx, [[cx + 58, cy + 18], [cx + 118, cy + 6], [cx + 78, cy + 64]], '#8b1a1a');
+      break;
+    case 'chickenwing':
+      drawEllipse(ctx, cx - 70, cy + 42, 34, 42, '#f4c968');
+      drawEllipse(ctx, cx + 70, cy + 42, 34, 42, '#f4c968');
+      break;
+    case 'angelwing':
+      drawEllipse(ctx, cx - 72, cy + 34, 38, 55, '#ffffff');
+      drawEllipse(ctx, cx + 72, cy + 34, 38, 55, '#ffffff');
+      break;
+    case 'jetpack':
+      drawRoundRect(ctx, cx - 26, cy + 4, 52, 78, 12, '#697386');
+      drawEllipse(ctx, cx - 17, cy + 91, 10, 20, '#ff8c1a', '#20283a', 5);
+      drawEllipse(ctx, cx + 17, cy + 91, 10, 20, '#ff8c1a', '#20283a', 5);
+      break;
+    case 'cape':
+      drawTriangle(ctx, [[cx - 58, cy + 0], [cx + 58, cy + 0], [cx + 34, cy + 116], [cx - 34, cy + 116]], '#d7263d');
+      break;
+    case 'balloon':
+      ['#ff5fa2', '#ffe066', '#6ec4ff'].forEach((c, i) => {
+        const bx = cx - 52 + i * 52;
+        drawEllipse(ctx, bx, cy - 62 - (i % 2) * 10, 19, 25, c, '#20283a', 5);
+        ctx.beginPath(); ctx.moveTo(bx, cy - 35); ctx.lineTo(cx, cy + 22);
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(32,40,58,.65)'; ctx.stroke();
+      });
+      break;
+  }
+}
+function drawHatArt(ctx, hat, cx, topY) {
+  switch (hat) {
+    case 'party':
+      drawTriangle(ctx, [[cx - 27, topY + 18], [cx + 27, topY + 18], [cx + 5, topY - 56]], '#ff5fa2');
+      drawEllipse(ctx, cx + 6, topY - 59, 8, 8, '#ffe066', '#20283a', 4);
+      break;
+    case 'tophat':
+      drawRoundRect(ctx, cx - 33, topY - 50, 66, 50, 8, '#222222');
+      drawRoundRect(ctx, cx - 48, topY - 6, 96, 18, 9, '#222222');
+      break;
+    case 'halo':
+      ctx.beginPath();
+      ctx.ellipse(cx, topY - 34, 45, 13, 0, 0, Math.PI * 2);
+      ctx.lineWidth = 8; ctx.strokeStyle = '#ffe066'; ctx.stroke();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#fff8bd'; ctx.stroke();
+      break;
+    case 'horns':
+      drawTriangle(ctx, [[cx - 44, topY + 6], [cx - 72, topY - 34], [cx - 24, topY - 6]], '#cc2b2b');
+      drawTriangle(ctx, [[cx + 44, topY + 6], [cx + 72, topY - 34], [cx + 24, topY - 6]], '#cc2b2b');
+      break;
+    case 'bunny':
+      drawRoundRect(ctx, cx - 48, topY - 74, 24, 72, 14, '#ffffff');
+      drawRoundRect(ctx, cx + 24, topY - 74, 24, 72, 14, '#ffffff');
+      break;
+    case 'crown':
+      drawTriangle(ctx, [[cx - 48, topY + 5], [cx - 32, topY - 44], [cx - 10, topY + 0], [cx, topY - 52], [cx + 10, topY + 0], [cx + 32, topY - 44], [cx + 48, topY + 5]], '#ffd23f');
+      drawRoundRect(ctx, cx - 50, topY - 3, 100, 22, 8, '#ffd23f');
+      break;
+    case 'propeller':
+      drawRoundRect(ctx, cx - 46, topY - 8, 92, 24, 14, '#ff9f43');
+      drawRoundRect(ctx, cx - 6, topY - 36, 12, 38, 5, '#888888', '#20283a', 4);
+      drawRoundRect(ctx, cx - 72, topY - 48, 144, 14, 7, '#ff5fa2', '#20283a', 4);
+      break;
+    case 'chef':
+      drawRoundRect(ctx, cx - 44, topY - 2, 88, 30, 12, '#ffffff');
+      drawEllipse(ctx, cx - 28, topY - 24, 28, 27, '#ffffff');
+      drawEllipse(ctx, cx, topY - 34, 32, 32, '#ffffff');
+      drawEllipse(ctx, cx + 30, topY - 24, 28, 27, '#ffffff');
+      break;
+  }
+}
+function drawStandeeArt(ctx, body, color, hat = 'none', back = 'none', w = 260, h = 320) {
+  ctx.clearRect(0, 0, w, h);
+  ctx.save();
+  ctx.shadowColor = 'rgba(20,40,70,0.22)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetY = 9;
+  const cx = w / 2;
+  const accent = normalizeHex(color);
+  const outline = '#20283a';
+  drawBackArt(ctx, back, cx, 146);
+
+  if (body === 'robot') {
+    drawRoundRect(ctx, cx - 48, 122, 96, 105, 18, '#aeb9c8', outline, 8);
+    drawRoundRect(ctx, cx - 58, 62, 116, 72, 18, '#d8e1ec', outline, 8);
+    drawRoundRect(ctx, cx - 38, 88, 76, 26, 10, '#26384f', outline, 5);
+    drawEye(ctx, cx - 18, 101, true); drawEye(ctx, cx + 18, 101, true);
+    drawRoundRect(ctx, cx - 32, 153, 64, 30, 8, accent, outline, 5);
+    drawRoundRect(ctx, cx - 68, 146, 28, 70, 14, '#b8c2d1', outline, 6);
+    drawRoundRect(ctx, cx + 40, 146, 28, 70, 14, '#b8c2d1', outline, 6);
+    ctx.beginPath(); ctx.moveTo(cx + 28, 62); ctx.lineTo(cx + 38, 30); ctx.lineWidth = 6; ctx.strokeStyle = outline; ctx.stroke();
+    drawEllipse(ctx, cx + 41, 26, 10, 10, '#6ee7ff', outline, 4);
+  } else if (body === 'ninja') {
+    drawRoundRect(ctx, cx - 50, 130, 100, 96, 24, '#1f2937', outline, 8);
+    drawEllipse(ctx, cx, 94, 55, 48, '#111827', outline, 8);
+    drawRoundRect(ctx, cx - 45, 88, 90, 30, 12, '#f6d7aa', outline, 5);
+    drawEye(ctx, cx - 18, 101); drawEye(ctx, cx + 18, 101);
+    drawTriangle(ctx, [[cx + 42, 81], [cx + 91, 58], [cx + 58, 112]], accent, outline, 6);
+    drawRoundRect(ctx, cx - 45, 158, 90, 22, 8, accent, null);
+  } else if (body === 'wizard') {
+    drawTriangle(ctx, [[cx - 62, 232], [cx + 62, 232], [cx + 34, 108], [cx - 34, 108]], '#5b3fb7', outline, 8);
+    drawRoundRect(ctx, cx - 42, 132, 84, 44, 16, accent, outline, 6);
+    drawEllipse(ctx, cx, 90, 49, 43, '#f6d7aa', outline, 8);
+    drawEye(ctx, cx - 17, 96); drawEye(ctx, cx + 17, 96); drawSmile(ctx, cx, 104, 30);
+    drawTriangle(ctx, [[cx - 54, 62], [cx + 54, 62], [cx + 8, 8]], '#5b3fb7', outline, 8);
+    drawEllipse(ctx, cx, 188, 12, 12, '#ffe066', outline, 4);
+  } else if (body === 'chicken') {
+    drawEllipse(ctx, cx, 163, 58, 72, '#fff7e6', outline, 8);
+    drawEllipse(ctx, cx, 91, 50, 46, '#fff7e6', outline, 8);
+    drawTriangle(ctx, [[cx - 5, 102], [cx + 50, 113], [cx - 5, 127]], '#ffb648', outline, 6);
+    drawEye(ctx, cx - 20, 91); drawEye(ctx, cx + 9, 94);
+    drawEllipse(ctx, cx - 8, 46, 13, 20, '#e74c3c', outline, 4);
+    drawEllipse(ctx, cx + 12, 43, 13, 20, '#e74c3c', outline, 4);
+    drawRoundRect(ctx, cx - 43, 151, 86, 26, 10, accent, outline, 5);
+    drawEllipse(ctx, cx - 62, 166, 25, 36, '#f4c968', outline, 6);
+    drawEllipse(ctx, cx + 62, 166, 25, 36, '#f4c968', outline, 6);
+  } else {
+    drawRoundRect(ctx, cx - 46, 128, 92, 100, 26, accent, outline, 8);
+    drawEllipse(ctx, cx, 89, 52, 48, '#f3c99f', outline, 8);
+    drawEye(ctx, cx - 18, 92); drawEye(ctx, cx + 18, 92); drawSmile(ctx, cx, 105, 36);
+    drawRoundRect(ctx, cx - 45, 158, 90, 20, 9, '#ffffff', null);
+    drawTriangle(ctx, [[cx - 48, 160], [cx + 48, 160], [cx - 18, 194]], '#ffffff', outline, 5);
+    drawRoundRect(ctx, cx - 70, 146, 28, 72, 14, shadeHex(accent, -15), outline, 6);
+    drawRoundRect(ctx, cx + 42, 146, 28, 72, 14, shadeHex(accent, -15), outline, 6);
+  }
+
+  // Tiny toy gun, kept as cosmetic and not as hitbox.
+  drawRoundRect(ctx, cx + 26, 168, 44, 20, 8, '#222222', outline, 5);
+  drawRoundRect(ctx, cx + 58, 159, 48, 14, 7, '#2e3440', outline, 4);
+  drawHatArt(ctx, hat, cx, 54);
+  ctx.restore();
+}
+function makeStandeeTexture(body, color, hat, back) {
+  const cvs = document.createElement('canvas');
+  cvs.width = 260;
+  cvs.height = 320;
+  drawStandeeArt(cvs.getContext('2d'), body, color, hat, back, cvs.width, cvs.height);
+  const texture = new THREE.CanvasTexture(cvs);
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
+}
+let previewAngle = 0;
+let previewAutoSpin = true;
+let previewDrag = null;
+function updatePreviewTransform() {
+  const stage = $('previewStage');
+  if (!stage) return;
+  stage.classList.toggle('spinning', previewAutoSpin);
+  if (!previewAutoSpin) stage.style.transform = `rotateY(${previewAngle}deg)`;
+  else stage.style.transform = '';
+  const autoBtn = $('previewAutoSpin');
+  if (autoBtn) autoBtn.textContent = previewAutoSpin ? 'Auto spin: ON' : 'Auto spin: OFF';
+}
 function updateAvatarPreview() {
   const body = BODY_SKINS.find(b => b.id === selfBody) || BODY_SKINS[0];
-  const hat = HATS.find(h => h.id === selfHat) || HATS[0];
-  const previewBody = $('previewBody');
-  const previewHat = $('previewHat');
-  if (previewBody) {
-    previewBody.textContent = body.label;
-    previewBody.style.background = selfColor;
+  const preview = $('previewCanvas');
+  const base = $('previewBase');
+  if (preview) {
+    const ctx = preview.getContext('2d');
+    drawStandeeArt(ctx, body.id, selfColor, selfHat, selfBack, preview.width, preview.height);
   }
-  if (previewHat) previewHat.textContent = selfHat !== 'none' ? hat.emoji : '';
+  if (base) base.style.background = `linear-gradient(180deg, ${shadeHex(selfColor, 20)}, ${selfColor})`;
+  updatePreviewTransform();
 }
+
+
+const previewLeftBtn = $('previewRotateLeft');
+const previewRightBtn = $('previewRotateRight');
+const previewAutoBtn = $('previewAutoSpin');
+if (previewLeftBtn) previewLeftBtn.addEventListener('click', () => { previewAutoSpin = false; previewAngle -= 35; updatePreviewTransform(); });
+if (previewRightBtn) previewRightBtn.addEventListener('click', () => { previewAutoSpin = false; previewAngle += 35; updatePreviewTransform(); });
+if (previewAutoBtn) previewAutoBtn.addEventListener('click', () => { previewAutoSpin = !previewAutoSpin; updatePreviewTransform(); });
+const previewBox = $('avatarPreview');
+if (previewBox) {
+  previewBox.addEventListener('pointerdown', e => {
+    previewAutoSpin = false;
+    previewDrag = { x: e.clientX, angle: previewAngle };
+    previewBox.setPointerCapture?.(e.pointerId);
+    updatePreviewTransform();
+  });
+  previewBox.addEventListener('pointermove', e => {
+    if (!previewDrag) return;
+    previewAngle = previewDrag.angle + (e.clientX - previewDrag.x) * 0.8;
+    updatePreviewTransform();
+  });
+  previewBox.addEventListener('pointerup', () => { previewDrag = null; });
+  previewBox.addEventListener('pointercancel', () => { previewDrag = null; });
+}
+updateAvatarPreview();
 
 const homeScreen = $('homeScreen');
 const lobbyScreen = $('lobbyScreen');
@@ -253,7 +493,7 @@ socket.on('roomUpdate', data => {
       const li = document.createElement('li');
       const label = document.createElement('span');
       label.innerHTML = `<span class="dot" style="background:${p.color}"></span>
-        <span>${p.isBot ? '🤖 ' : ''}<b>${bodySkin.label}</b> ${p.hat && p.hat !== 'none' ? hatEmoji + ' ' : ''}${p.back && p.back !== 'none' ? backEmoji + ' ' : ''}${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
+        <span>${p.isBot ? '🤖 ' : ''}<b>${bodySkin.tag || bodySkin.name}</b> ${p.hat && p.hat !== 'none' ? hatEmoji + ' ' : ''}${p.back && p.back !== 'none' ? backEmoji + ' ' : ''}${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
       label.style.display = 'flex';
       label.style.alignItems = 'center';
       label.style.gap = '10px';
@@ -720,64 +960,65 @@ function addChibiFace(group, body) {
   group.add(leftEye, rightEye);
 }
 
+
 function makePlayerMesh(color, isSelf, hat, back, body = 'islander') {
   const group = new THREE.Group();
   const baseColor = new THREE.Color(color);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.55 });
-  const trimMat = new THREE.MeshStandardMaterial({ color: baseColor.clone().offsetHSL(0, 0, -0.16), roughness: 0.7 });
 
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.48, 8, 16), bodyMat);
-  torso.position.y = 0.54;
-  torso.castShadow = true;
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.31, 18, 14), trimMat);
-  belly.scale.set(0.9, 0.75, 0.72);
-  belly.position.y = 0.48;
-  belly.castShadow = true;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.29, 22, 16), bodyMat);
-  head.position.y = 1.08;
-  head.castShadow = true;
-  group.add(torso, belly, head);
+  // 2.5D standee: a hand-drawn sprite on a small board-game base.
+  // It reads cleaner than geometry characters and keeps the gameplay hitbox unchanged.
+  const baseMat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.6, metalness: 0.05 });
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.11, 36), baseMat);
+  base.position.y = 0.055;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  group.add(base);
 
-  const footGeo = new THREE.SphereGeometry(0.11, 10, 8);
-  const footMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 });
-  [-0.15, 0.15].forEach(x => {
-    const foot = new THREE.Mesh(footGeo, footMat);
-    foot.scale.set(1.15, 0.45, 0.75);
-    foot.position.set(x, 0.08, 0.05);
-    group.add(foot);
-  });
+  const edge = new THREE.Mesh(
+    new THREE.TorusGeometry(0.43, 0.035, 8, 36),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })
+  );
+  edge.position.y = 0.12;
+  edge.rotation.x = Math.PI / 2;
+  group.add(edge);
 
-  addSkinDetails(group, body, baseColor);
-  addChibiFace(group, body);
-  addHatDecoration(group, hat);
-  addBackDecoration(group, back);
+  const texture = makeStandeeTexture(body, color, hat, back);
+  const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, depthTest: true });
+  const standee = new THREE.Sprite(mat);
+  standee.position.set(0, 0.9, 0.03);
+  standee.scale.set(0.92, 1.14, 1);
+  group.add(standee);
+  group.userData.standee = standee;
 
-  const gunMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.25, roughness: 0.45 });
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.14, 0.22), gunMat);
-  grip.position.set(0, 0.63, 0.33);
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.42, 10), gunMat);
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0, 0.66, 0.58);
-  group.add(grip, barrel);
+  // A clear front pointer shows aiming direction even though the standee art faces the camera.
+  const arrow = new THREE.Mesh(
+    new THREE.ConeGeometry(0.12, 0.22, 3),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 })
+  );
+  arrow.rotation.x = Math.PI / 2;
+  arrow.position.set(0, 0.15, 0.52);
+  group.add(arrow);
 
-  const dirArrow = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.18, 3), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.86 }));
-  dirArrow.rotation.x = Math.PI / 2;
-  dirArrow.position.set(0, 0.04, 0.58);
-  group.add(dirArrow);
+  const muzzle = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.04, 0.34, 10),
+    new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.2, roughness: 0.45 })
+  );
+  muzzle.rotation.x = Math.PI / 2;
+  muzzle.position.set(0.22, 0.66, 0.42);
+  group.add(muzzle);
 
   if (isSelf) {
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.5, 0.6, 24),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.6 })
+      new THREE.RingGeometry(0.52, 0.63, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.62 })
     );
     ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.02;
+    ring.position.y = 0.018;
     group.add(ring);
     group.userData.ring = ring;
   }
   return group;
 }
-
 
 function makeNameSprite(text, color) {
   const cvs = document.createElement('canvas');
@@ -1031,6 +1272,7 @@ function spawnDodgeAfterimage(entry, color = 0x9fe0ff) {
     ghost.rotation.copy(entry.mesh.rotation);
     ghost.traverse(obj => {
       if (obj.isMesh) obj.material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.18, depthWrite: false });
+      if (obj.isSprite) obj.material = new THREE.SpriteMaterial({ color, transparent: true, opacity: 0.18, depthWrite: false, depthTest: true });
     });
     scene.add(ghost);
     fxBubbles.push({ mesh: ghost, life: 0, duration: 0.75 + i * 0.12, base: 1 });
