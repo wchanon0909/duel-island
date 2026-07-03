@@ -71,3 +71,9 @@ npm start
 - Character preview now uses a closer camera and dynamic auto-fit scaling.
 - Preview characters are larger/readable again while still staying inside the preview card.
 - Gameplay character size, hitbox, skills, and phase mechanics are unchanged.
+
+## Update v9 - Preview, Dodge, Shield polish
+
+- Improved the hero preview fit so the 3D character stays readable and closer to equal size across heroes.
+- Passive Dodge is now consumed after it saves the player once, then disappears from the skill table.
+- Shield remains an Active Skill. When used, it protects the player from one lethal shot in that round and shows a stronger shield effect when blocking.

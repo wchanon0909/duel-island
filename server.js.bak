@@ -168,7 +168,6 @@ class Room {
       back: p.back,
       body: p.body,
       passiveSkill: revealSkills ? p.passiveSkill : null,
-      dodgeUsed: !!p.dodgeUsed,
       activeSkill: revealSkills ? p.activeSkill : null,
       kills: p.kills || 0
     }));
@@ -238,7 +237,6 @@ class Room {
         body: p.body,
         alive: p.alive,
         passiveSkill: revealSkills ? p.passiveSkill : null,
-        dodgeUsed: !!p.dodgeUsed,
         activeSkill: revealSkills ? p.activeSkill : null,
         moveLocked: !!p.moveLocked,
         passiveSelected: !!p.passiveSkill
@@ -290,7 +288,7 @@ class Room {
       }
     }
     io.to(this.code).emit('passiveReveal', {
-      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back, body: p.body, passiveSkill: p.passiveSkill, dodgeUsed: !!p.dodgeUsed }))
+      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back, body: p.body, passiveSkill: p.passiveSkill }))
     });
     this.addEvent('เปิดเผย Passive Skill ของทุกคนแล้ว', 'skill');
     this.startRound();
@@ -434,7 +432,6 @@ class Room {
       back: p.back,
       body: p.body,
       passiveSkill: this.isSkillMode() ? p.passiveSkill : null,
-      dodgeUsed: !!p.dodgeUsed,
       activeSkill: this.isSkillMode() ? p.activeSkill : null,
       moveLocked: !!p.moveLocked,
       x: p.x,
@@ -453,7 +450,6 @@ class Room {
     for (const p of aliveList) {
       if (!p.isBot) io.to(p.id).emit('yourSkillState', {
         passiveSkill: this.isSkillMode() ? p.passiveSkill : null,
-        dodgeUsed: !!p.dodgeUsed,
         activeSkill: this.isSkillMode() ? p.activeSkill : null,
         moveLocked: !!p.moveLocked
       });
@@ -538,12 +534,8 @@ class Room {
           return { hitId: null, x: hitX, z: hitZ, exited: false, blocked: true, blockId: t.id };
         }
         if (skillMode && t.passiveSkill === 'dodge' && !t.dodgeUsed) {
-          // Passive Dodge is a one-time personal passive. After it saves the player,
-          // consume and remove it so the UI no longer shows the Dodge icon.
           t.dodgeUsed = true;
-          t.passiveSkill = null;
           ev.dodges.push(t.id);
-          this.addEvent(`${t.name} ใช้ Dodge หลบกระสุนได้ 1 ครั้ง`, 'skill');
           excludeIds.add(t.id);
           continue;
         }
@@ -733,7 +725,6 @@ class Room {
           wasHit: eliminated.includes(p.id),
           size: 1,
           passiveSkill: skillMode ? p.passiveSkill : null,
-          dodgeUsed: !!p.dodgeUsed,
           activeSkill: skillMode ? p.activeSkill : null,
           activeUsed: skillMode ? p.activeUsed : null,
           moveLocked: !!p.moveLocked,
@@ -747,7 +738,6 @@ class Room {
       skillState: skillMode ? [...this.players.values()].map(p => ({
         id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back, body: p.body, alive: p.alive,
         passiveSkill: p.passiveSkill,
-        dodgeUsed: !!p.dodgeUsed,
         activeSkill: p.activeSkill,
         moveLocked: !!p.moveLocked,
         kills: p.kills || 0

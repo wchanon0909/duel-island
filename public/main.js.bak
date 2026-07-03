@@ -87,7 +87,7 @@ let selfBack = 'none';
 
 // ---------- Skill System V2 ----------
 const PASSIVE_SKILLS = [
-  { id: 'dodge', emoji: '💨', name: 'Dodge', desc: 'Passive ประจำตัว ใช้หลบกระสุนได้ 1 ครั้ง เมื่อทำงานแล้วสกิลจะหายไป' }
+  { id: 'dodge', emoji: '💨', name: 'Dodge', desc: 'ทุกคนเริ่มต้นด้วย Dodge 1 ครั้ง กระสุนจะวิ่งผ่านไปโดยไม่ตาย' }
 ];
 const ACTIVE_SKILLS = [
   { id: 'shotgun', emoji: '🔫', name: 'Shotgun', desc: 'ยิงกระสุนออกเป็นรูปกรวย ระยะไม่เกิน 3 ช่อง' },
@@ -103,7 +103,6 @@ let roster = [];
 let myPassiveSkill = null;
 let myActiveSkill = null;
 let myActiveUsed = null;
-let myDodgeUsed = false;
 let myMoveLocked = false;
 
 // mirrors server.js timing constants for the sequential fire animation
@@ -405,10 +404,9 @@ let previewRoot = null;
 let previewLoopStarted = false;
 let previewFitDirty = true;
 let previewLastFitState = '';
-const PREVIEW_TARGET_FILL = 0.82;
-const PREVIEW_MIN_CAMERA_Z = 1.7;
-const PREVIEW_MAX_CAMERA_Z = 5.2;
-const PREVIEW_MODEL_BOOST = 1.18;
+const PREVIEW_TARGET_FILL = 0.86;
+const PREVIEW_MIN_SCALE = 1.25;
+const PREVIEW_MAX_SCALE = 2.75;
 
 function initModelPreview() {
   if (previewRenderer || !$('previewCanvas')) return;
@@ -418,7 +416,7 @@ function initModelPreview() {
   previewScene = new THREE.Scene();
   previewCamera = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
   // Preview camera is intentionally closer than the gameplay camera so the hero is readable.
-  previewCamera.position.set(0, 0.86, 2.75);
+  previewCamera.position.set(0, 0.95, 3.55);
   previewScene.add(new THREE.AmbientLight(0xffffff, 1.6));
   const key = new THREE.DirectionalLight(0xffffff, 2.1);
   key.position.set(2.6, 4.6, 3.4);
@@ -456,41 +454,35 @@ function fitModelPreviewToFrame(force = false) {
 
   const savedRotationY = previewRoot.rotation.y;
   previewRoot.rotation.y = 0;
-  previewRoot.scale.setScalar(PREVIEW_MODEL_BOOST);
+  previewRoot.scale.setScalar(1);
   previewRoot.position.set(0, 0, 0);
   previewRoot.updateMatrixWorld(true);
 
-  // Fit by the actual character model when available, not by the colored foot ring.
-  // This keeps all heroes close to the same visual height in the preview.
-  const fitTarget = previewRoot.userData.modelWrapper || previewRoot.userData.placeholder || previewRoot;
-  let box = new THREE.Box3().setFromObject(fitTarget);
-  let size = new THREE.Vector3();
-  let center = new THREE.Vector3();
+  const box = new THREE.Box3().setFromObject(previewRoot);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
   box.getSize(size);
   box.getCenter(center);
-  if (!isFinite(size.y) || size.y <= 0.01) {
-    box = new THREE.Box3().setFromObject(previewRoot);
-    box.getSize(size);
-    box.getCenter(center);
-  }
   if (!isFinite(size.y) || size.y <= 0.01) {
     previewRoot.rotation.y = savedRotationY;
     return;
   }
 
-  const aspect = Math.max(0.35, previewCamera.aspect || 1);
-  const fovRad = THREE.MathUtils.degToRad(previewCamera.fov * 0.5);
-  const neededVertical = Math.max(size.y, size.x / aspect) / PREVIEW_TARGET_FILL;
-  const distance = THREE.MathUtils.clamp(neededVertical / (2 * Math.tan(fovRad)), PREVIEW_MIN_CAMERA_Z, PREVIEW_MAX_CAMERA_Z);
+  const cameraDistance = Math.max(0.1, Math.abs(previewCamera.position.z));
+  const verticalWorld = 2 * cameraDistance * Math.tan(THREE.MathUtils.degToRad(previewCamera.fov * 0.5));
+  const desiredHeight = verticalWorld * PREVIEW_TARGET_FILL;
+  const fittedScale = THREE.MathUtils.clamp(desiredHeight / size.y, PREVIEW_MIN_SCALE, PREVIEW_MAX_SCALE);
 
-  previewCamera.position.set(0, 0.86, distance);
-  previewCamera.lookAt(0, 0.82, 0);
-  previewCamera.updateProjectionMatrix();
-
-  // Center the character body in the card while keeping the feet above the red base shadow.
-  previewRoot.position.x -= center.x;
-  previewRoot.position.z -= center.z;
-  previewRoot.position.y += 0.82 - center.y;
+  previewRoot.scale.setScalar(fittedScale);
+  previewRoot.updateMatrixWorld(true);
+  const fittedBox = new THREE.Box3().setFromObject(previewRoot);
+  const fittedCenter = new THREE.Vector3();
+  fittedBox.getCenter(fittedCenter);
+  // Keep the character centered and slightly above the foot-ring/base inside the card.
+  const targetCenterY = previewCamera.position.y - verticalWorld * 0.02;
+  previewRoot.position.x -= fittedCenter.x;
+  previewRoot.position.y += targetCenterY - fittedCenter.y;
+  previewRoot.position.z -= fittedCenter.z;
   previewRoot.rotation.y = savedRotationY;
   previewRoot.updateMatrixWorld(true);
 
@@ -684,8 +676,7 @@ socket.on('roomUpdate', data => {
         selfBody = p.body || 'islander'; updateBodyPickerUI();
         selfColor = p.color || selfColor; updateColorPickerUI();
         selfAlive = true;
-        myPassiveSkill = p.dodgeUsed ? null : (p.passiveSkill || null);
-        myDodgeUsed = !!p.dodgeUsed;
+        myPassiveSkill = p.passiveSkill || null;
         myActiveSkill = p.activeSkill || null;
       }
       const li = document.createElement('li');
@@ -735,12 +726,12 @@ function renderSkillPanel(players = []) {
   if (currentMode !== 'skill' || !players.length) { el.classList.add('hidden'); return; }
   let html = '<div class="skillPanelTitle">🧩 Skill Table</div>';
   players.forEach(p => {
-    const passive = (p.passiveSkill && !p.dodgeUsed) ? passiveById(p.passiveSkill) : null;
+    const passive = passiveById(p.passiveSkill);
     const active = activeById(p.activeSkill);
     html += `<div class="skillRow" data-id="${p.id}">
       <span class="orderDot" style="background:${p.color}"></span>
       <span class="skillName">${escapeHtml(p.name)}${p.id === selfId ? ' (คุณ)' : ''}${p.moveLocked ? ' <span class="skillLocked">ล็อกเดิน</span>' : ''}</span>
-      <span class="skillIcon ${passive ? '' : 'empty'}" title="${passive ? passive.name + ' — ' + passive.desc : (p.dodgeUsed ? 'Dodge ถูกใช้ไปแล้ว' : 'ไม่มี Passive')}">${passive ? passive.emoji : '–'}</span>
+      <span class="skillIcon ${passive ? '' : 'empty'}" title="${passive ? passive.name + ' — ' + passive.desc : 'ไม่มี Passive'}">${passive ? passive.emoji : '–'}</span>
       <span class="skillIcon ${active ? '' : 'empty'}" title="${active ? active.name + ' — ' + active.desc : 'ไม่มี Active'}">${active ? active.emoji : '–'}</span>
     </div>`;
   });
@@ -776,8 +767,7 @@ socket.on('skillState', data => {
   renderSkillPanel(data.players || []);
   const me = (data.players || []).find(p => p.id === selfId);
   if (me) {
-    myPassiveSkill = me.dodgeUsed ? null : (me.passiveSkill || null);
-    myDodgeUsed = !!me.dodgeUsed;
+    myPassiveSkill = me.passiveSkill || myPassiveSkill;
     myActiveSkill = me.activeSkill || null;
     myMoveLocked = !!me.moveLocked;
     renderStatusNotice();
@@ -844,8 +834,7 @@ socket.on('passiveReveal', data => {
 });
 
 socket.on('yourSkillState', data => {
-  myPassiveSkill = data.dodgeUsed ? null : (data.passiveSkill || null);
-  myDodgeUsed = !!data.dodgeUsed;
+  myPassiveSkill = data.passiveSkill || null;
   myActiveSkill = data.activeSkill || null;
   myActiveUsed = null;
   foresightVisionActive = false;
@@ -1673,14 +1662,13 @@ function spawnLightning(entry) {
 }
 
 
-function spawnShieldBubble(entry, color = 0x9fd3ff, duration = 1.15) {
-  const geo = new THREE.SphereGeometry(0.76 * (entry.size || 1), 32, 18);
-  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.42, wireframe: true, depthWrite: false });
+function spawnShieldBubble(entry, color = 0x9fd3ff, duration = 0.9) {
+  const geo = new THREE.SphereGeometry(0.72 * (entry.size || 1), 24, 16);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.34, wireframe: true, depthWrite: false });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.set(entry.x, 0.78 * (entry.size || 1), entry.z);
   scene.add(mesh);
   fxBubbles.push({ mesh, life: 0, duration, base: 1 });
-  spawnFlash(entry.x, 1.05 * (entry.size || 1), entry.z, 1.15 * (entry.size || 1), color, 0.38);
 }
 
 function spawnDodgeAfterimage(entry, color = 0x9fe0ff) {
@@ -2033,8 +2021,7 @@ socket.on('roundStart', data => {
     $('instructions').textContent = '👻 คุณตกรอบแล้ว กำลังดูผู้เล่นที่เหลือหาที่กำบัง...';
   } else {
     const me = roster.find(p => p.id === selfId);
-    myPassiveSkill = me ? (me.dodgeUsed ? null : me.passiveSkill) : myPassiveSkill;
-    myDodgeUsed = !!(me && me.dodgeUsed);
+    myPassiveSkill = me ? me.passiveSkill : myPassiveSkill;
     myActiveSkill = me ? me.activeSkill : myActiveSkill;
     selfBody = me ? (me.body || selfBody) : selfBody;
     selfHat = me ? (me.hat || selfHat) : selfHat;
