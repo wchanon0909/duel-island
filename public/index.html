@@ -36,6 +36,10 @@
         </div>
         <button id="btnCreate">สร้างห้องใหม่</button>
       </div>
+      <div class="roomBrowser">
+        <div class="roomBrowserTitle">ห้องที่เปิดอยู่</div>
+        <div id="roomList" class="roomList"></div>
+      </div>
       <div class="err" id="homeErr"></div>
     </div>
   </div>
@@ -46,6 +50,7 @@
       <h1>ห้องรอผู้เล่น</h1>
       <div class="roomCode" id="lobbyCode">----</div>
       <div id="lobbyModeBox" class="lobbyModeBox"></div>
+      <div id="lobbyLockRow" class="lobbyLockRow hidden"></div>
       <ul id="lobbyPlayers"></ul>
       <div class="customizationBox heroSelectBox">
         <div class="customTitle">Hero Selection</div>
@@ -58,11 +63,7 @@
               </div>
             </div>
             <div id="selectedHeroTitle" class="selectedHeroTitle">Islander</div>
-            <div class="previewControls">
-              <button id="previewRotateLeft" type="button" title="หมุนซ้าย">↺</button>
-              <button id="previewAutoSpin" type="button" title="เปิด/ปิดหมุนอัตโนมัติ">Auto spin</button>
-              <button id="previewRotateRight" type="button" title="หมุนขวา">↻</button>
-            </div>
+            <div class="previewSpinNote">ตัวอย่างหมุนอัตโนมัติ</div>
           </div>
           <div class="heroGridColumn">
             <div class="heroHint">เลือกตัวละครก่อนเริ่มเกม</div>
@@ -90,7 +91,7 @@
       <div class="stat"><div class="label">เวลา</div><div class="value" id="timerValue">--</div></div>
     </div>
     <div class="instructions" id="instructions">WASD เดิน • เมาส์หมุนทิศเลเซอร์ • กด SPACE ยืนยันพร้อมยิง</div>
-    <button id="btnEndGame" class="endGameBtn hidden">🏁 จบเกม → ล็อบบี้</button>
+    <button id="btnEndGame" class="endGameBtn hidden" title="จบเกมและกลับล็อบบี้">🏁 จบเกม</button>
     <div class="banner hidden" id="banner"></div>
     <div class="centerAnnouncement hidden" id="centerAnnouncement"></div>
     <div class="eliminatedList hidden" id="eliminatedList"></div>
@@ -121,6 +122,10 @@
     <div class="panel">
       <h1 id="gameOverTitle">จบเกม</h1>
       <div class="subtitle" id="gameOverSubtitle"></div>
+      <div class="winnerStageBox">
+        <canvas id="winnerStageCanvas" width="360" height="260"></canvas>
+      </div>
+      <div id="killSummary" class="killSummary"></div>
       <button id="btnPlayAgain">เล่นอีกครั้ง (กลับล็อบบี้)</button>
     </div>
   </div>

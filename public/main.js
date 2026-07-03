@@ -50,8 +50,10 @@ const MODEL_SKIN_SOURCES = {
 };
 const CHARACTER_TARGET_HEIGHT = 1.46;
 const CHARACTER_FOOT_Y = 0.16;
-// Hyper3D exports in this set face -Z. Game aim direction is +Z, so rotate models by 180 deg.
-const CHARACTER_FRONT_ROTATION_Y = Math.PI;
+// Hyper3D models from this set point their gun toward local +Z.
+// The game also fires along local +Z, so do not flip the model.
+// If a future asset is reversed, add a per-skin rotation instead of changing game aim logic.
+const CHARACTER_FRONT_ROTATION_Y = 0;
 const modelLoader = new GLTFLoader();
 const objLoader = new OBJLoader();
 const textureLoader = new THREE.TextureLoader();
@@ -164,8 +166,7 @@ BODY_SKINS.forEach(b => {
   btn.title = b.name;
   btn.innerHTML = `
     <span class="heroIcon">${b.label.split(' ')[0]}</span>
-    <span class="heroName">${escapeHtml(b.name)}</span>
-    <span class="heroTag">${escapeHtml(b.tag)}</span>`;
+    <span class="heroName">${escapeHtml(b.name)}</span>`;
   btn.addEventListener('click', () => socket.emit('setBody', { body: b.id }));
   bodyPickerEl.appendChild(btn);
 });
@@ -453,8 +454,7 @@ function updatePreviewTransform() {
     stage.style.transform = '';
   }
   if (previewRoot) previewRoot.rotation.y = THREE.MathUtils.degToRad(previewAngle);
-  const autoBtn = $('previewAutoSpin');
-  if (autoBtn) autoBtn.textContent = previewAutoSpin ? 'Auto spin: ON' : 'Auto spin: OFF';
+  previewAutoSpin = true;
 }
 
 function updateAvatarPreview() {
@@ -477,28 +477,8 @@ function updateAvatarPreview() {
 }
 
 
-const previewLeftBtn = $('previewRotateLeft');
-const previewRightBtn = $('previewRotateRight');
-const previewAutoBtn = $('previewAutoSpin');
-if (previewLeftBtn) previewLeftBtn.addEventListener('click', () => { previewAutoSpin = false; previewAngle -= 35; updatePreviewTransform(); });
-if (previewRightBtn) previewRightBtn.addEventListener('click', () => { previewAutoSpin = false; previewAngle += 35; updatePreviewTransform(); });
-if (previewAutoBtn) previewAutoBtn.addEventListener('click', () => { previewAutoSpin = !previewAutoSpin; updatePreviewTransform(); });
-const previewBox = $('avatarPreview');
-if (previewBox) {
-  previewBox.addEventListener('pointerdown', e => {
-    previewAutoSpin = false;
-    previewDrag = { x: e.clientX, angle: previewAngle };
-    previewBox.setPointerCapture?.(e.pointerId);
-    updatePreviewTransform();
-  });
-  previewBox.addEventListener('pointermove', e => {
-    if (!previewDrag) return;
-    previewAngle = previewDrag.angle + (e.clientX - previewDrag.x) * 0.8;
-    updatePreviewTransform();
-  });
-  previewBox.addEventListener('pointerup', () => { previewDrag = null; });
-  previewBox.addEventListener('pointercancel', () => { previewDrag = null; });
-}
+// Preview is intentionally auto-rotating only. No manual rotate/stop controls.
+previewAutoSpin = true;
 updateAvatarPreview();
 
 const homeScreen = $('homeScreen');
@@ -541,6 +521,43 @@ socket.on('errorMsg', ({ message }) => {
   $('lobbyErr').textContent = message;
 });
 
+function renderRoomList(rooms = []) {
+  const el = $('roomList');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!rooms.length) {
+    const empty = document.createElement('div');
+    empty.className = 'emptyRooms';
+    empty.textContent = 'ยังไม่มีห้องที่เปิดอยู่';
+    el.appendChild(empty);
+    return;
+  }
+  rooms.forEach(room => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'roomCard';
+    btn.disabled = !!room.locked || room.playerCount >= room.maxPlayers;
+    const modeText = room.mode === 'skill' ? 'Skill' : 'Classic';
+    const lockText = room.locked ? '🔒 ล็อก' : `${room.playerCount}/${room.maxPlayers}`;
+    btn.innerHTML = `
+      <span>
+        <span class="roomCardCode">${escapeHtml(room.code)}</span>
+        <span class="roomCardMeta">(${escapeHtml(room.hostName || 'Host')}) • ${modeText}</span>
+      </span>
+      <span class="roomCardBadge">${lockText}</span>`;
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      $('roomCodeInput').value = room.code;
+      const name = $('nameJoin').value.trim() || $('nameCreate').value.trim() || 'Player';
+      $('nameJoin').value = name;
+      socket.emit('joinRoom', { code: room.code, name });
+    });
+    el.appendChild(btn);
+  });
+}
+
+socket.on('roomListUpdate', ({ rooms }) => renderRoomList(rooms || []));
+
 socket.on('joined', data => {
   selfId = data.selfId;
   roomCode = data.code;
@@ -573,6 +590,21 @@ socket.on('roomUpdate', data => {
         });
       }
     }
+    const lockRow = $('lobbyLockRow');
+    if (lockRow) {
+      lockRow.classList.toggle('hidden', !isHost);
+      lockRow.innerHTML = '';
+      if (isHost) {
+        const lockBtn = document.createElement('button');
+        lockBtn.type = 'button';
+        lockBtn.className = `lockRoomBtn ${data.locked ? 'locked' : ''}`;
+        lockBtn.textContent = data.locked ? '🔒 ห้องล็อกอยู่' : '🔓 เปิดให้เข้าร่วม';
+        lockBtn.title = 'ล็อก/ปลดล็อกห้องไม่ให้ผู้เล่นใหม่เข้าร่วม';
+        lockBtn.addEventListener('click', () => socket.emit('toggleRoomLock'));
+        lockRow.appendChild(lockBtn);
+      }
+    }
+
     const list = $('lobbyPlayers');
     list.innerHTML = '';
     data.players.forEach(p => {
@@ -585,14 +617,11 @@ socket.on('roomUpdate', data => {
         myPassiveSkill = p.passiveSkill || null;
         myActiveSkill = p.activeSkill || null;
       }
-      const bodySkin = HERO_BY_ID(p.body);
       const li = document.createElement('li');
       const label = document.createElement('span');
+      label.className = 'lobbyNameOnly';
       label.innerHTML = `<span class="dot" style="background:${p.color}"></span>
-        <span>${p.isBot ? '🤖 ' : ''}<b>${escapeHtml(bodySkin.name)}</b> — ${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
-      label.style.display = 'flex';
-      label.style.alignItems = 'center';
-      label.style.gap = '10px';
+        <span class="playerNameText">${p.isBot ? '🤖 ' : ''}${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
       li.appendChild(label);
       if (p.isBot && isHost) {
         const removeBtn = document.createElement('button');
@@ -609,15 +638,17 @@ socket.on('roomUpdate', data => {
   }
 });
 
-socket.on('gameOver', ({ winnerId, winnerName }) => {
+socket.on('gameOver', data => {
+  const { winnerId, winnerName } = data;
   showScreen('gameover');
   if (winnerId) {
     $('gameOverTitle').textContent = winnerId === selfId ? '🏆 คุณชนะ!' : `🏆 ${winnerName} ชนะ!`;
-    $('gameOverSubtitle').textContent = 'รอดคนเดียวบนเกาะ';
+    $('gameOverSubtitle').textContent = 'ผู้เหลือรอดยืนบนเวทีแห่งชัยชนะ';
   } else {
     $('gameOverTitle').textContent = '💥 เสมอ ไม่มีผู้รอด';
     $('gameOverSubtitle').textContent = 'ทุกคนยิงโดนกันหมด';
   }
+  renderGameOverSummary(data);
   $('btnPlayAgain').classList.toggle('hidden', !isHost);
 });
 
@@ -1216,19 +1247,25 @@ function makePlayerMesh(color, isSelf, hat, back, body = 'islander') {
 
 function makeNameSprite(text, color) {
   const cvs = document.createElement('canvas');
-  cvs.width = 256; cvs.height = 64;
+  cvs.width = 512; cvs.height = 128;
   const ctx = cvs.getContext('2d');
-  ctx.fillStyle = 'rgba(10,16,32,0.75)';
-  roundRect(ctx, 0, 8, 256, 48, 14); ctx.fill();
-  ctx.fillStyle = color;
-  ctx.fillRect(14, 22, 14, 14);
-  ctx.font = 'bold 24px Segoe UI, sans-serif';
-  ctx.fillStyle = '#fff';
-  ctx.fillText(text, 38, 42);
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 34px Mitr, Segoe UI, sans-serif';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,0.96)';
+  ctx.lineWidth = 9;
+  ctx.strokeText(text, cvs.width / 2, 62);
+  ctx.strokeStyle = 'rgba(10,16,32,0.38)';
+  ctx.lineWidth = 3;
+  ctx.strokeText(text, cvs.width / 2, 62);
+  ctx.fillStyle = color || '#ffffff';
+  ctx.fillText(text, cvs.width / 2, 62);
   const tex = new THREE.CanvasTexture(cvs);
-  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false });
+  const mat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(1.6, 0.4, 1);
+  sprite.scale.set(2.1, 0.52, 1);
   return sprite;
 }
 function roundRect(ctx, x, y, w, h, r) {
@@ -1241,6 +1278,101 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
+// ---------- Game over winner stage ----------
+let endRenderer = null;
+let endScene = null;
+let endCamera = null;
+let endRoot = null;
+let endLoopStarted = false;
+
+function initWinnerStage() {
+  const canvasEl = $('winnerStageCanvas');
+  if (!canvasEl || endRenderer) return;
+  endRenderer = new THREE.WebGLRenderer({ canvas: canvasEl, alpha: true, antialias: true });
+  endRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  endScene = new THREE.Scene();
+  endCamera = new THREE.PerspectiveCamera(34, 1, 0.1, 50);
+  endCamera.position.set(0, 1.25, 4.2);
+  endCamera.lookAt(0, 0.72, 0);
+  endScene.add(new THREE.AmbientLight(0xffffff, 1.45));
+  const key = new THREE.DirectionalLight(0xffffff, 2.2);
+  key.position.set(2.5, 4.2, 3.6);
+  endScene.add(key);
+  const rim = new THREE.DirectionalLight(0xffe6a8, 1.0);
+  rim.position.set(-3, 2.2, -2.5);
+  endScene.add(rim);
+  resizeWinnerStage();
+  if (!endLoopStarted) {
+    endLoopStarted = true;
+    requestAnimationFrame(renderWinnerStage);
+  }
+}
+
+function resizeWinnerStage() {
+  if (!endRenderer || !$('winnerStageCanvas')) return;
+  const canvasEl = $('winnerStageCanvas');
+  const w = canvasEl.clientWidth || 360;
+  const h = canvasEl.clientHeight || 260;
+  endRenderer.setSize(w, h, false);
+  endCamera.aspect = w / h;
+  endCamera.updateProjectionMatrix();
+}
+
+function renderWinnerStage() {
+  requestAnimationFrame(renderWinnerStage);
+  if (!endRenderer || !endScene || !endCamera) return;
+  resizeWinnerStage();
+  if (endRoot) endRoot.rotation.y += 0.012;
+  endRenderer.render(endScene, endCamera);
+}
+
+function renderGameOverSummary(data = {}) {
+  const players = (data.players || []).slice().sort((a, b) => (b.kills || 0) - (a.kills || 0) || String(a.name).localeCompare(String(b.name)));
+  const summary = $('killSummary');
+  if (summary) {
+    const rows = players.map((p, i) => `
+      <tr class="${p.id === data.winnerId ? 'killWinner' : ''}">
+        <td>${i + 1}</td>
+        <td>${escapeHtml(p.name)}${p.id === data.winnerId ? ' 🏆' : ''}</td>
+        <td>${p.alive ? 'รอด' : 'ตกรอบ'}</td>
+        <td>${p.kills || 0}</td>
+      </tr>`).join('');
+    summary.innerHTML = `
+      <div class="killSummaryTitle">สรุปจำนวน Kill</div>
+      <table class="killTable">
+        <thead><tr><th>#</th><th>ผู้เล่น</th><th>สถานะ</th><th>Kill</th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="4">ไม่มีข้อมูล</td></tr>'}</tbody>
+      </table>`;
+  }
+
+  initWinnerStage();
+  if (!endScene) return;
+  if (endRoot) {
+    endScene.remove(endRoot);
+    endRoot = null;
+  }
+  endRoot = new THREE.Group();
+  const podium = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.9, 1.08, 0.24, 48),
+    new THREE.MeshStandardMaterial({ color: 0xffc857, roughness: 0.55, metalness: 0.08 })
+  );
+  podium.position.y = -0.12;
+  endRoot.add(podium);
+  const stageRing = new THREE.Mesh(
+    new THREE.TorusGeometry(0.92, 0.035, 8, 64),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.88 })
+  );
+  stageRing.position.y = 0.02;
+  stageRing.rotation.x = Math.PI / 2;
+  endRoot.add(stageRing);
+  if (data.winner) {
+    const hero = makePlayerMesh(data.winner.color || '#ff9f43', false, data.winner.hat || 'none', data.winner.back || 'none', data.winner.body || 'islander');
+    hero.position.set(0, 0, 0);
+    hero.scale.setScalar(1.55);
+    endRoot.add(hero);
+  }
+  endScene.add(endRoot);
+}
 
 
 let aimSkillFx = null;
@@ -2038,7 +2170,7 @@ socket.on('roundResult', data => {
     mesh.rotation.y = p.angle;
     mesh.scale.setScalar(size);
     scene.add(mesh);
-    const sprite = makeNameSprite(p.name + (p.id === selfId ? ' (คุณ)' : ''), p.color);
+    const sprite = makeNameSprite(p.name, p.color);
     sprite.position.set(p.x, 1.7 * size + 0.2, p.z);
     scene.add(sprite);
     const entry = {

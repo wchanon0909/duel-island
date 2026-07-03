@@ -127,6 +127,7 @@ class Room {
     this.mode = mode === 'skill' ? 'skill' : 'classic';
     this.state = 'lobby';
     this.players = new Map();
+    this.locked = false;
     this.round = 0;
     this.islandSize = 12;
     this.timer = null;
@@ -167,7 +168,8 @@ class Room {
       back: p.back,
       body: p.body,
       passiveSkill: revealSkills ? p.passiveSkill : null,
-      activeSkill: revealSkills ? p.activeSkill : null
+      activeSkill: revealSkills ? p.activeSkill : null,
+      kills: p.kills || 0
     }));
   }
 
@@ -189,7 +191,8 @@ class Room {
       back: 'none',
       body: BODY_IDS[Math.floor(Math.random() * BODY_IDS.length)],
       passiveSkill: null,
-      activeSkill: null
+      activeSkill: null,
+      kills: 0
     });
   }
 
@@ -201,6 +204,13 @@ class Room {
   setMode(mode) {
     if (this.state !== 'lobby') return;
     this.mode = mode === 'skill' ? 'skill' : 'classic';
+    this.broadcastRoom();
+  }
+
+  setLocked(locked) {
+    if (this.state !== 'lobby') return;
+    this.locked = !!locked;
+    this.addEvent(this.locked ? 'ห้องถูกล็อกแล้ว' : 'ห้องถูกปลดล็อกแล้ว', 'system');
     this.broadcastRoom();
   }
 
@@ -319,9 +329,11 @@ class Room {
       hostId: this.hostId,
       state: this.state,
       mode: this.mode,
+      locked: this.locked,
       round: this.round,
       players: this.publicPlayers()
     });
+    broadcastRoomList();
   }
 
   aliveIds() {
@@ -338,6 +350,7 @@ class Room {
       p.passiveSkill = null;
       p.activeSkill = null;
       p.activeUsed = null;
+      p.kills = 0;
       p.dodgeUsed = false;
       p.secondChanceUsed = false;
       p.moveLocked = false;
@@ -632,6 +645,14 @@ class Room {
       }
     }
 
+    const eliminatedSet = new Set(eliminated);
+    shots.forEach(s => {
+      const shooter = aliveMap.get(s.shooterId);
+      if (!shooter) return;
+      const uniqueKills = new Set((s.hitIds || []).filter(id => eliminatedSet.has(id)));
+      shooter.kills = (shooter.kills || 0) + uniqueKills.size;
+    });
+
     let angelGrant = null;
     if (skillMode && this.aliveIds().length > 1 && firingOrder.length >= 2) {
       const hitCountByShooter = new Map();
@@ -691,7 +712,8 @@ class Room {
           passiveSkill: skillMode ? p.passiveSkill : null,
           activeSkill: skillMode ? p.activeSkill : null,
           activeUsed: skillMode ? p.activeUsed : null,
-          moveLocked: !!p.moveLocked
+          moveLocked: !!p.moveLocked,
+          kills: p.kills || 0
         })),
       shots,
       cards: [],
@@ -702,7 +724,8 @@ class Room {
         id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back, body: p.body, alive: p.alive,
         passiveSkill: p.passiveSkill,
         activeSkill: p.activeSkill,
-        moveLocked: !!p.moveLocked
+        moveLocked: !!p.moveLocked,
+        kills: p.kills || 0
       })) : []
     };
     io.to(this.code).emit('roundResult', payload);
@@ -719,7 +742,26 @@ class Room {
       const winner = survivors[0] ? this.players.get(survivors[0]) : null;
       io.to(this.code).emit('gameOver', {
         winnerId: winner ? winner.id : null,
-        winnerName: winner ? winner.name : null
+        winnerName: winner ? winner.name : null,
+        winner: winner ? {
+          id: winner.id,
+          name: winner.name,
+          color: winner.color,
+          body: winner.body,
+          hat: winner.hat,
+          back: winner.back,
+          kills: winner.kills || 0
+        } : null,
+        players: [...this.players.values()].map(p => ({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          body: p.body,
+          hat: p.hat,
+          back: p.back,
+          alive: p.alive,
+          kills: p.kills || 0
+        }))
       });
       return;
     }
@@ -739,6 +781,7 @@ class Room {
       p.passiveSkill = null;
       p.activeSkill = null;
       p.activeUsed = null;
+      p.kills = 0;
       p.dodgeUsed = false;
       p.secondChanceUsed = false;
       p.moveLocked = false;
@@ -751,8 +794,30 @@ class Room {
   }
 }
 
+function publicRoomList() {
+  return [...rooms.values()]
+    .filter(room => room.state === 'lobby')
+    .map(room => {
+      const host = room.players.get(room.hostId);
+      return {
+        code: room.code,
+        hostName: host ? host.name : 'Host',
+        playerCount: room.players.size,
+        maxPlayers: MAX_PLAYERS,
+        mode: room.mode,
+        locked: !!room.locked
+      };
+    })
+    .sort((a, b) => a.code.localeCompare(b.code));
+}
+
+function broadcastRoomList(target = io) {
+  target.emit('roomListUpdate', { rooms: publicRoomList() });
+}
+
 io.on('connection', socket => {
   let currentRoomCode = null;
+  broadcastRoomList(socket);
 
   socket.on('createRoom', ({ name, mode }) => {
     const code = genCode();
@@ -769,6 +834,14 @@ io.on('connection', socket => {
     }
     if (room.state !== 'lobby') {
       socket.emit('errorMsg', { message: 'เกมเริ่มไปแล้ว รอรอบหน้าหรือสร้างห้องใหม่' });
+      return;
+    }
+    if (room.locked) {
+      socket.emit('errorMsg', { message: 'ห้องนี้ถูกล็อกแล้ว ไม่สามารถเข้าร่วมเพิ่มได้' });
+      return;
+    }
+    if (room.players.size >= MAX_PLAYERS) {
+      socket.emit('errorMsg', { message: 'ห้องเต็มแล้ว' });
       return;
     }
     joinRoomInternal(room, name);
@@ -789,7 +862,8 @@ io.on('connection', socket => {
       back: 'none',
       body: 'islander',
       passiveSkill: null,
-      activeSkill: null
+      activeSkill: null,
+      kills: 0
     });
     socket.emit('joined', { code: room.code, selfId: socket.id });
     socket.emit('eventLogUpdate', { events: room.eventLog });
@@ -800,6 +874,12 @@ io.on('connection', socket => {
     const room = rooms.get(currentRoomCode);
     if (!room || room.hostId !== socket.id || room.state !== 'lobby') return;
     room.setMode(mode);
+  });
+
+  socket.on('toggleRoomLock', () => {
+    const room = rooms.get(currentRoomCode);
+    if (!room || room.hostId !== socket.id || room.state !== 'lobby') return;
+    room.setLocked(!room.locked);
   });
 
   socket.on('startGame', () => {
@@ -906,6 +986,7 @@ io.on('connection', socket => {
     if (room.realPlayerCount() === 0) {
       clearTimeout(room.timer);
       rooms.delete(room.code);
+      broadcastRoomList();
       return;
     }
     if (room.hostId === socket.id) {

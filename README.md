@@ -34,3 +34,16 @@ npm start
 ## Notes
 
 `armedguy` ใช้ OBJ + texture เพราะไฟล์ที่ได้รับมาไม่มี GLB ส่วนตัวอื่นใช้ GLB แบบ shaded เพื่อให้เบากว่า PBR และเหมาะกับเว็บเกมมากขึ้น
+
+## Update: orientation and HUD fix
+- Rechecked imported AI character orientation so the model gun faces the same direction as the in-game firing laser.
+- Changed the End Game control from a full-width top bar into a compact corner button.
+
+## Update: room list, lobby cleanup, hero UX, and game over summary
+- Home screen now shows open rooms as clickable cards: room code + host name + mode + player count.
+- Host can lock/unlock the room from the lobby with a small lock button. Locked rooms stay visible but cannot be joined by new players.
+- Lobby player strip now shows only player names and colored dots, without overlapping hero names or vertical scrolling.
+- Hero Selection is compact and non-scroll: all 8 heroes are visible as selection cards without short tags.
+- Character preview now spins automatically only; manual rotate/stop buttons were removed.
+- Player names above characters are centered text without a background label box.
+- Game over screen now shows the winner standing alone on a small stage and includes a kill-count summary table.

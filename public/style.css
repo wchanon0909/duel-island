@@ -257,12 +257,20 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
 .pickMark { flex-shrink: 0; width: 22px; text-align: center; }
 .orderCard { flex-shrink: 0; width: 22px; text-align: center; }
 .endGameBtn {
-  position: absolute; top: 12px; left: 12px; z-index: 6; pointer-events: auto;
-  font-family: 'Baloo 2', sans-serif; font-weight: 700; font-size: 11px;
-  color: #fff; background: rgba(224,90,107,0.9); border: none; border-radius: 9px;
-  padding: 5px 9px; cursor: pointer; box-shadow: 0 3px 8px rgba(200,60,80,0.3);
+  position: absolute; top: 14px; right: 14px; left: auto;
+  z-index: 20; pointer-events: auto;
+  width: auto !important; min-width: 0; margin-top: 0;
+  font-family: 'Baloo 2', 'Mitr', sans-serif; font-weight: 800; font-size: 12px;
+  color: #fff; background: rgba(224,90,107,0.94); border: 2px solid rgba(255,255,255,0.75); border-radius: 999px;
+  padding: 6px 11px; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(200,60,80,0.34);
 }
-.endGameBtn:hover { background: #d64960; }
+.endGameBtn:hover {
+  background: #d64960;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(200,60,80,0.38);
+}
+.endGameBtn:active { transform: translateY(1px); }
 .leftPanel {
   position: absolute; left: 12px; width: 210px; z-index: 5;
   background: rgba(255,255,255,0.92); border: 3px solid #fff; border-radius: 14px;
@@ -696,4 +704,222 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
   .bodyPicker.heroGrid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
   .avatarPreview.standeePreview { width: 210px; height: 220px; }
   .previewStage, #previewCanvas { width: 202px; height: 212px; }
+}
+
+/* Lobby / room browser update */
+.roomBrowser {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #f4faff;
+  border: 2px solid #d8e9f8;
+}
+.roomBrowserTitle {
+  font-family: 'Baloo 2', 'Mitr', sans-serif;
+  font-weight: 800;
+  color: #2f6fb0;
+  margin-bottom: 8px;
+}
+.roomList {
+  display: grid;
+  gap: 8px;
+  max-height: 210px;
+  overflow-y: auto;
+}
+.roomCard {
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #ffffff, #eaf3fb);
+  color: #2b3a55;
+  box-shadow: 0 3px 0 #c7dceb;
+  text-align: left;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.roomCard:disabled {
+  opacity: .58;
+}
+.roomCardCode {
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  color: #ff9f43;
+  letter-spacing: 2px;
+}
+.roomCardMeta {
+  font-size: 12px;
+  color: #6d84a8;
+  font-weight: 700;
+}
+.roomCardBadge {
+  border-radius: 999px;
+  background: #dff1ff;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #2f6fb0;
+}
+.emptyRooms {
+  color: #7c92ad;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px;
+}
+.lobbyLockRow {
+  margin: 0 0 8px;
+  display: flex;
+  justify-content: center;
+}
+.lockRoomBtn {
+  width: auto !important;
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  background: linear-gradient(180deg, #ffffff, #eaf3fb);
+  color: #3a4f6b;
+  box-shadow: 0 3px 0 #c7dceb;
+}
+.lockRoomBtn.locked {
+  background: linear-gradient(180deg, #ffe3e8, #ffb9c5);
+  color: #bf3350;
+  box-shadow: 0 3px 0 #d27b8a;
+}
+
+/* Cleaner lobby roster */
+#lobbyPlayers {
+  max-height: none !important;
+  overflow: visible !important;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)) !important;
+  gap: 8px !important;
+}
+#lobbyPlayers li {
+  justify-content: center;
+  text-align: center;
+  min-height: 38px;
+  overflow: hidden;
+}
+#lobbyPlayers .lobbyNameOnly {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+#lobbyPlayers .playerNameText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+  color: #2b3a55;
+}
+
+/* Hero selection compact non-scroll layout */
+.customizationBox.heroSelectBox {
+  overflow: visible !important;
+}
+.heroGridColumn {
+  overflow: visible !important;
+}
+.bodyPicker.heroGrid {
+  overflow: visible !important;
+  grid-template-columns: repeat(4, minmax(120px, 1fr)) !important;
+  gap: 9px !important;
+}
+.bodyBtn.heroCard {
+  height: 62px !important;
+  grid-template-columns: 38px 1fr !important;
+  grid-template-rows: 1fr !important;
+}
+.bodyBtn.heroCard .heroIcon {
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: 12px !important;
+  font-size: 20px !important;
+}
+.bodyBtn.heroCard .heroName {
+  font-size: 14px !important;
+}
+.bodyBtn.heroCard .heroTag { display: none !important; }
+.previewControls { display: none !important; }
+.previewSpinNote {
+  color: #7c92ad;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.avatarPreview.standeePreview {
+  cursor: default !important;
+  touch-action: auto !important;
+}
+.avatarPreview.standeePreview:active { cursor: default !important; }
+
+/* Game over summary */
+#gameOverPanel .panel {
+  width: min(760px, 94vw);
+  max-height: 92vh;
+  overflow: auto;
+}
+.winnerStageBox {
+  margin: 8px auto 14px;
+  width: min(360px, 82vw);
+  height: 260px;
+  border-radius: 24px;
+  background: radial-gradient(circle at 50% 74%, rgba(255,217,128,.5), transparent 42%), linear-gradient(180deg, #ffffff, #eaf7ff);
+  border: 3px solid #ffffff;
+  box-shadow: inset 0 -18px 40px rgba(47,111,176,.10), 0 12px 24px rgba(30,60,100,.18);
+  overflow: hidden;
+}
+#winnerStageCanvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.killSummary {
+  margin: 8px auto 14px;
+  max-width: 560px;
+  text-align: left;
+}
+.killSummaryTitle {
+  text-align: center;
+  font-family: 'Baloo 2', sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: #2f6fb0;
+  margin-bottom: 8px;
+}
+.killTable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  font-size: 14px;
+}
+.killTable th {
+  color: #6d84a8;
+  font-size: 12px;
+  text-align: left;
+  padding: 0 10px;
+}
+.killTable td {
+  background: #f0f7fd;
+  color: #2b3a55;
+  padding: 8px 10px;
+  font-weight: 700;
+}
+.killTable td:first-child { border-radius: 12px 0 0 12px; }
+.killTable td:last-child { border-radius: 0 12px 12px 0; text-align: center; }
+.killWinner td { background: #fff2c2; }
+@media (max-height: 760px) {
+  .bodyPicker.heroGrid { grid-template-columns: repeat(4, minmax(100px, 1fr)) !important; }
+  .bodyBtn.heroCard { height: 54px !important; padding: 7px 9px !important; }
+  .avatarPreview.standeePreview { width: 200px !important; height: 205px !important; }
+  .previewStage, #previewCanvas { width: 192px !important; height: 198px !important; }
+}
+@media (max-width: 760px) {
+  .bodyPicker.heroGrid { grid-template-columns: repeat(2, minmax(130px, 1fr)) !important; }
 }
