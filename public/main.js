@@ -8,6 +8,21 @@ let isHost = false;
 let currentIslandSize = 16;
 let currentRound = 1;
 
+// ---------- Character customization ----------
+const BODY_SKINS = [
+  { id: 'islander', label: 'ISL', name: 'Islander' },
+  { id: 'robot', label: 'BOT', name: 'Robot' },
+  { id: 'ninja', label: 'NIN', name: 'Ninja' },
+  { id: 'wizard', label: 'WIZ', name: 'Wizard' },
+  { id: 'chicken', label: 'CHK', name: 'Chicken' }
+];
+const PLAYER_COLORS = [
+  '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6',
+  '#e67e22', '#1abc9c', '#ff6fa3', '#95a5a6', '#34495e'
+];
+let selfBody = 'islander';
+let selfColor = '#3498db';
+
 // ---------- Hats ----------
 const HATS = [
   { id: 'none', emoji: '🚫' },
@@ -90,6 +105,7 @@ HATS.forEach(h => {
 });
 function updateHatPickerUI() {
   [...hatPickerEl.children].forEach((btn, i) => btn.classList.toggle('active', HATS[i].id === selfHat));
+  updateAvatarPreview();
 }
 
 const backPickerEl = $('backPicker');
@@ -103,6 +119,48 @@ BACKS.forEach(b => {
 });
 function updateBackPickerUI() {
   [...backPickerEl.children].forEach((btn, i) => btn.classList.toggle('active', BACKS[i].id === selfBack));
+  updateAvatarPreview();
+}
+
+
+const bodyPickerEl = $('bodyPicker');
+BODY_SKINS.forEach(b => {
+  const btn = document.createElement('button');
+  btn.className = 'bodyBtn';
+  btn.textContent = b.label;
+  btn.title = b.name;
+  btn.addEventListener('click', () => socket.emit('setBody', { body: b.id }));
+  bodyPickerEl.appendChild(btn);
+});
+function updateBodyPickerUI() {
+  [...bodyPickerEl.children].forEach((btn, i) => btn.classList.toggle('active', BODY_SKINS[i].id === selfBody));
+  updateAvatarPreview();
+}
+
+const colorPickerEl = $('colorPicker');
+PLAYER_COLORS.forEach(c => {
+  const btn = document.createElement('button');
+  btn.className = 'colorBtn';
+  btn.style.background = c;
+  btn.title = c;
+  btn.addEventListener('click', () => socket.emit('setColor', { color: c }));
+  colorPickerEl.appendChild(btn);
+});
+function updateColorPickerUI() {
+  [...colorPickerEl.children].forEach((btn, i) => btn.classList.toggle('active', PLAYER_COLORS[i] === selfColor));
+  updateAvatarPreview();
+}
+
+function updateAvatarPreview() {
+  const body = BODY_SKINS.find(b => b.id === selfBody) || BODY_SKINS[0];
+  const hat = HATS.find(h => h.id === selfHat) || HATS[0];
+  const previewBody = $('previewBody');
+  const previewHat = $('previewHat');
+  if (previewBody) {
+    previewBody.textContent = body.label;
+    previewBody.style.background = selfColor;
+  }
+  if (previewHat) previewHat.textContent = selfHat !== 'none' ? hat.emoji : '';
 }
 
 const homeScreen = $('homeScreen');
@@ -183,16 +241,19 @@ socket.on('roomUpdate', data => {
       if (p.id === selfId) {
         selfHat = p.hat || 'none'; updateHatPickerUI();
         selfBack = p.back || 'none'; updateBackPickerUI();
+        selfBody = p.body || 'islander'; updateBodyPickerUI();
+        selfColor = p.color || selfColor; updateColorPickerUI();
         selfAlive = true;
         myPassiveSkill = p.passiveSkill || null;
         myActiveSkill = p.activeSkill || null;
       }
       const hatEmoji = (HATS.find(h => h.id === p.hat) || HATS[0]).emoji;
       const backEmoji = (BACKS.find(b => b.id === p.back) || BACKS[0]).emoji;
+      const bodySkin = BODY_SKINS.find(b => b.id === p.body) || BODY_SKINS[0];
       const li = document.createElement('li');
       const label = document.createElement('span');
       label.innerHTML = `<span class="dot" style="background:${p.color}"></span>
-        <span>${p.isBot ? '🤖 ' : ''}${p.hat && p.hat !== 'none' ? hatEmoji + ' ' : ''}${p.back && p.back !== 'none' ? backEmoji + ' ' : ''}${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
+        <span>${p.isBot ? '🤖 ' : ''}<b>${bodySkin.label}</b> ${p.hat && p.hat !== 'none' ? hatEmoji + ' ' : ''}${p.back && p.back !== 'none' ? backEmoji + ' ' : ''}${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
       label.style.display = 'flex';
       label.style.alignItems = 'center';
       label.style.gap = '10px';
@@ -610,26 +671,99 @@ function addBackDecoration(group, back) {
   }
 }
 
-function makePlayerMesh(color, isSelf, hat, back) {
+
+function addSkinDetails(group, body, mainColor) {
+  const dark = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.6 });
+  if (body === 'robot') {
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.2, 0.035), new THREE.MeshStandardMaterial({ color: 0x26384f, emissive: 0x0b223d, emissiveIntensity: 0.35 }));
+    panel.position.set(0, 0.63, 0.235);
+    group.add(panel);
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.28, 8), dark);
+    antenna.position.set(0.13, 1.42, -0.02);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 10), new THREE.MeshStandardMaterial({ color: 0x6ec4ff, emissive: 0x3fa0f0, emissiveIntensity: 0.7 }));
+    tip.position.set(0.13, 1.58, -0.02);
+    group.add(antenna, tip);
+  } else if (body === 'ninja') {
+    const mask = new THREE.Mesh(new THREE.BoxGeometry(0.43, 0.16, 0.035), dark);
+    mask.position.set(0, 1.12, 0.245);
+    group.add(mask);
+  } else if (body === 'wizard') {
+    const robe = new THREE.Mesh(new THREE.ConeGeometry(0.35, 0.78, 18), new THREE.MeshStandardMaterial({ color: 0x5b3fb7, roughness: 0.75 }));
+    robe.position.y = 0.38;
+    group.add(robe);
+    const star = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), new THREE.MeshStandardMaterial({ color: 0xffe066, emissive: 0xffcc33, emissiveIntensity: 0.5 }));
+    star.position.set(0, 0.76, 0.34);
+    group.add(star);
+  } else if (body === 'chicken') {
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 12), new THREE.MeshStandardMaterial({ color: 0xffb648 }));
+    beak.rotation.x = Math.PI / 2;
+    beak.position.set(0, 1.03, 0.34);
+    const comb = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), new THREE.MeshStandardMaterial({ color: 0xe74c3c }));
+    comb.scale.set(0.8, 1.5, 0.55);
+    comb.position.set(0, 1.34, 0.02);
+    group.add(beak, comb);
+  } else {
+    const sash = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.09, 0.035), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 }));
+    sash.position.set(0, 0.64, 0.235);
+    sash.rotation.z = -0.35;
+    group.add(sash);
+  }
+}
+
+function addChibiFace(group, body) {
+  const eyeMat = new THREE.MeshBasicMaterial({ color: body === 'robot' ? 0x6ec4ff : 0x111827 });
+  const eyeGeo = new THREE.SphereGeometry(0.035, 8, 8);
+  const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+  leftEye.position.set(-0.09, 1.1, 0.255);
+  const rightEye = leftEye.clone();
+  rightEye.position.x = 0.09;
+  group.add(leftEye, rightEye);
+}
+
+function makePlayerMesh(color, isSelf, hat, back, body = 'islander') {
   const group = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.85, 0.4), bodyMat);
-  body.position.y = 0.425;
-  body.castShadow = true;
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), bodyMat);
-  head.position.y = 0.85 + 0.21;
+  const baseColor = new THREE.Color(color);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.55 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: baseColor.clone().offsetHSL(0, 0, -0.16), roughness: 0.7 });
+
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.48, 8, 16), bodyMat);
+  torso.position.y = 0.54;
+  torso.castShadow = true;
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.31, 18, 14), trimMat);
+  belly.scale.set(0.9, 0.75, 0.72);
+  belly.position.y = 0.48;
+  belly.castShadow = true;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.29, 22, 16), bodyMat);
+  head.position.y = 1.08;
   head.castShadow = true;
-  group.add(body, head);
+  group.add(torso, belly, head);
+
+  const footGeo = new THREE.SphereGeometry(0.11, 10, 8);
+  const footMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.8 });
+  [-0.15, 0.15].forEach(x => {
+    const foot = new THREE.Mesh(footGeo, footMat);
+    foot.scale.set(1.15, 0.45, 0.75);
+    foot.position.set(x, 0.08, 0.05);
+    group.add(foot);
+  });
+
+  addSkinDetails(group, body, baseColor);
+  addChibiFace(group, body);
   addHatDecoration(group, hat);
   addBackDecoration(group, back);
 
-  // gun / aim nub on front
-  const nub = new THREE.Mesh(
-    new THREE.BoxGeometry(0.12, 0.12, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0x222222 })
-  );
-  nub.position.set(0, 0.55, 0.35);
-  group.add(nub);
+  const gunMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.25, roughness: 0.45 });
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.14, 0.22), gunMat);
+  grip.position.set(0, 0.63, 0.33);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.42, 10), gunMat);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.66, 0.58);
+  group.add(grip, barrel);
+
+  const dirArrow = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.18, 3), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.86 }));
+  dirArrow.rotation.x = Math.PI / 2;
+  dirArrow.position.set(0, 0.04, 0.58);
+  group.add(dirArrow);
 
   if (isSelf) {
     const ring = new THREE.Mesh(
@@ -643,6 +777,7 @@ function makePlayerMesh(color, isSelf, hat, back) {
   }
   return group;
 }
+
 
 function makeNameSprite(text, color) {
   const cvs = document.createElement('canvas');
@@ -669,6 +804,62 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+
+
+let aimSkillFx = null;
+function clearAimSkillFx() {
+  if (aimSkillFx) {
+    scene.remove(aimSkillFx);
+    if (aimSkillFx.geometry) aimSkillFx.geometry.dispose();
+    if (aimSkillFx.material) aimSkillFx.material.dispose();
+    aimSkillFx = null;
+  }
+}
+function makeShotgunConeMesh(color) {
+  const spread = 0.34;
+  const range = 3;
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  for (let i = 0; i <= 16; i++) {
+    const a = -spread + (spread * 2 * i / 16);
+    const x = Math.sin(a) * range;
+    const y = Math.cos(a) * range;
+    if (i === 0) shape.lineTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  shape.lineTo(0, 0);
+  const geo = new THREE.ShapeGeometry(shape);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, side: THREE.DoubleSide, depthWrite: false });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  return mesh;
+}
+function makeSniperLineMesh(color) {
+  const geo = new THREE.CylinderGeometry(0.028, 0.028, 1, 10);
+  geo.rotateX(Math.PI / 2);
+  geo.translate(0, 0, 0.5);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xfff2a8, transparent: true, opacity: 0.82 });
+  return new THREE.Mesh(geo, mat);
+}
+function updateSkillAimPreview() {
+  if (!placing || !selfMesh || selfReady) { clearAimSkillFx(); return; }
+  const skill = myActiveUsed || null;
+  if (skill !== 'shotgun' && skill !== 'sniper') { clearAimSkillFx(); return; }
+  if (!aimSkillFx || aimSkillFx.userData.skill !== skill) {
+    clearAimSkillFx();
+    aimSkillFx = skill === 'shotgun' ? makeShotgunConeMesh(selfColor) : makeSniperLineMesh(selfColor);
+    aimSkillFx.userData.skill = skill;
+    scene.add(aimSkillFx);
+  }
+  aimSkillFx.position.set(selfPos.x, 0.032, selfPos.z);
+  aimSkillFx.rotation.z = skill === 'shotgun' ? -selfAngle : 0;
+  if (skill === 'sniper') {
+    aimSkillFx.rotation.y = selfAngle;
+    aimSkillFx.position.y = 0.09;
+    aimSkillFx.scale.z = bounds * 2;
+  }
 }
 
 function makeLaser(color) {
@@ -718,7 +909,7 @@ function getBloodTexture() {
   return bloodTextureCache;
 }
 
-let fxSprites = [], fxBeams = [], fxParticles = [], revealDecals = [], fxBullets = [], fxLabels = [];
+let fxSprites = [], fxBeams = [], fxParticles = [], revealDecals = [], fxBullets = [], fxLabels = [], fxBubbles = [];
 
 // short labels that float above players when a skill fires
 const SKILL_LABEL = {
@@ -807,7 +998,11 @@ function spawnSegmentBullet(color, segments, radius) {
   glow.scale.setScalar(radius * 4);
   glow.position.copy(pts[0]);
   scene.add(glow);
-  fxBullets.push({ mesh, glow, pts, cum, hitAt, total: cum[cum.length - 1], dist: 0, nextIdx: 1 });
+  const trailGeo = new THREE.BufferGeometry().setFromPoints([pts[0], pts[0]]);
+  const trailMat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.45 });
+  const trail = new THREE.Line(trailGeo, trailMat);
+  scene.add(trail);
+  fxBullets.push({ mesh, glow, trail, trailPoints: [pts[0].clone()], pts, cum, hitAt, total: cum[cum.length - 1], dist: 0, nextIdx: 1 });
 }
 
 // The Thunder VFX: bright bolt glow at the caster plus sparks across the kill radius
@@ -817,6 +1012,46 @@ function spawnLightning(entry) {
     const a = Math.random() * Math.PI * 2, r = Math.random() * THUNDER_RADIUS_C;
     spawnFlash(entry.x + Math.cos(a) * r, 0.4, entry.z + Math.sin(a) * r, 0.6, 0xdff0ff, 0.4);
   }
+}
+
+
+function spawnShieldBubble(entry, color = 0x9fd3ff, duration = 0.9) {
+  const geo = new THREE.SphereGeometry(0.72 * (entry.size || 1), 24, 16);
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.34, wireframe: true, depthWrite: false });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(entry.x, 0.78 * (entry.size || 1), entry.z);
+  scene.add(mesh);
+  fxBubbles.push({ mesh, life: 0, duration, base: 1 });
+}
+
+function spawnDodgeAfterimage(entry, color = 0x9fe0ff) {
+  for (let i = 0; i < 3; i++) {
+    const ghost = entry.mesh.clone(true);
+    ghost.position.set(entry.x + (i - 1) * 0.18, 0, entry.z - i * 0.12);
+    ghost.rotation.copy(entry.mesh.rotation);
+    ghost.traverse(obj => {
+      if (obj.isMesh) obj.material = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.18, depthWrite: false });
+    });
+    scene.add(ghost);
+    fxBubbles.push({ mesh: ghost, life: 0, duration: 0.75 + i * 0.12, base: 1 });
+  }
+}
+
+function spawnShotgunConeAt(entry) {
+  const mesh = makeShotgunConeMesh(entry.color || 0xffffff);
+  mesh.position.set(entry.x, 0.045, entry.z);
+  mesh.rotation.z = -entry.angle;
+  scene.add(mesh);
+  fxBubbles.push({ mesh, life: 0, duration: 0.9, base: 1 });
+}
+
+function spawnSniperLineAt(entry) {
+  const mesh = makeSniperLineMesh(entry.color || 0xfff2a8);
+  mesh.position.set(entry.x, 0.13, entry.z);
+  mesh.rotation.y = entry.angle;
+  mesh.scale.z = currentIslandSize * 2.4;
+  scene.add(mesh);
+  fxBubbles.push({ mesh, life: 0, duration: 0.8, base: 1 });
 }
 
 function makeBloodDecal() {
@@ -876,13 +1111,22 @@ function updateFx(dt) {
       if (b.hitAt[b.nextIdx]) killVictim(b.hitAt[b.nextIdx]);
       b.nextIdx++;
     }
-    if (b.dist >= b.total) { scene.remove(b.mesh); scene.remove(b.glow); fxBullets.splice(i, 1); continue; }
+    if (b.dist >= b.total) { scene.remove(b.mesh); scene.remove(b.glow); if (b.trail) scene.remove(b.trail); fxBullets.splice(i, 1); continue; }
     let seg = 1;
     while (seg < b.cum.length && b.cum[seg] < b.dist) seg++;
     const s0 = b.cum[seg - 1], s1 = b.cum[seg];
     const tt = s1 > s0 ? (b.dist - s0) / (s1 - s0) : 0;
     b.mesh.position.lerpVectors(b.pts[seg - 1], b.pts[seg], tt);
     b.glow.position.copy(b.mesh.position);
+  }
+  for (let i = fxBubbles.length - 1; i >= 0; i--) {
+    const f = fxBubbles[i];
+    f.life += dt;
+    const t = f.life / f.duration;
+    f.mesh.scale.setScalar((f.base || 1) * (1 + t * 0.55));
+    f.mesh.traverse(obj => { if (obj.material && typeof obj.material.opacity === 'number') obj.material.opacity = Math.max(0, obj.material.opacity * 0.94); });
+    if (f.mesh.material && typeof f.mesh.material.opacity === 'number') f.mesh.material.opacity = Math.max(0, 0.38 * (1 - t));
+    if (t >= 1) { scene.remove(f.mesh); fxBubbles.splice(i, 1); }
   }
   for (let i = fxParticles.length - 1; i >= 0; i--) {
     const p = fxParticles[i];
@@ -935,7 +1179,7 @@ socket.on('spectateSnapshot', data => {
   clearSpectatorMeshes();
   data.players.forEach(p => {
     if (p.id === selfId) return;
-    const mesh = makePlayerMesh(p.color, false, p.hat, p.back);
+    const mesh = makePlayerMesh(p.color, false, p.hat, p.back, p.body);
     mesh.position.set(p.x, 0, p.z);
     mesh.rotation.y = p.angle;
     scene.add(mesh);
@@ -1015,7 +1259,6 @@ window.addEventListener('mousemove', e => {
   mouseNdc.y = -(e.clientY / window.innerHeight) * 2 + 1;
 });
 
-let selfColor = '#3498db';
 let placing = false;
 
 socket.on('roundStart', data => {
@@ -1031,6 +1274,7 @@ socket.on('roundStart', data => {
 
   if (selfMesh) { scene.remove(selfMesh); selfMesh = null; }
   if (selfLaser) { scene.remove(selfLaser); selfLaser = null; }
+  clearAimSkillFx();
 
   spectating = !selfAlive;
   placing = true;
@@ -1065,6 +1309,10 @@ socket.on('roundStart', data => {
     const me = roster.find(p => p.id === selfId);
     myPassiveSkill = me ? me.passiveSkill : myPassiveSkill;
     myActiveSkill = me ? me.activeSkill : myActiveSkill;
+    selfBody = me ? (me.body || selfBody) : selfBody;
+    selfHat = me ? (me.hat || selfHat) : selfHat;
+    selfBack = me ? (me.back || selfBack) : selfBack;
+    selfColor = me ? (me.color || selfColor) : selfColor;
     myMoveLocked = !!(me && me.moveLocked);
     $('instructions').textContent = myMoveLocked
       ? '⚡ รอบนี้โดน Taser: เดินไม่ได้ แต่ยังหมุนเล็ง/ยิง/ใช้สกิลได้ • SPACE ยืนยัน'
@@ -1078,7 +1326,7 @@ socket.on('roundStart', data => {
       selfAngle = Math.random() * Math.PI * 2;
     }
 
-    selfMesh = makePlayerMesh(selfColor, true, selfHat, selfBack);
+    selfMesh = makePlayerMesh(selfColor, true, selfHat, selfBack, selfBody);
     scene.add(selfMesh);
     selfLaser = makeLaser(selfColor);
     selfLaser.material.opacity = 0.5;
@@ -1093,7 +1341,13 @@ socket.on('roundStart', data => {
 // track color for self via roomUpdate
 socket.on('roomUpdate', data => {
   const me = data.players.find(p => p.id === selfId);
-  if (me) selfColor = me.color;
+  if (me) {
+    selfColor = me.color || selfColor;
+    selfHat = me.hat || selfHat;
+    selfBack = me.back || selfBack;
+    selfBody = me.body || selfBody;
+    updateColorPickerUI(); updateHatPickerUI(); updateBackPickerUI(); updateBodyPickerUI();
+  }
   $('aliveValue').textContent = data.players.filter(p => p.alive).length + '/' + data.players.length;
 });
 
@@ -1137,7 +1391,10 @@ function updatePlacement(dt) {
   selfMesh.rotation.y = selfAngle;
   selfLaser.position.set(selfPos.x, 0.55, selfPos.z);
   selfLaser.rotation.y = selfAngle;
-  selfLaser.scale.z = bounds * 2;
+  selfLaser.scale.z = myActiveUsed === 'shotgun' ? 3 : bounds * 2;
+  selfLaser.material.opacity = myActiveUsed === 'sniper' ? 0.95 : (myActiveUsed === 'shotgun' ? 0.25 : 0.5);
+  selfLaser.material.color.set(myActiveUsed === 'sniper' ? 0xfff2a8 : selfColor);
+  updateSkillAimPreview();
 
   // camera follow, high-angle chase view
   const camOffset = new THREE.Vector3(0, 11, 7);
@@ -1169,7 +1426,8 @@ function clearRevealMeshes() {
   fxSprites.forEach(f => scene.remove(f.sprite)); fxSprites = [];
   fxBeams.forEach(f => scene.remove(f.mesh)); fxBeams = [];
   fxParticles.forEach(f => scene.remove(f.points)); fxParticles = [];
-  fxBullets.forEach(f => { scene.remove(f.mesh); scene.remove(f.glow); }); fxBullets = [];
+  fxBullets.forEach(f => { scene.remove(f.mesh); scene.remove(f.glow); if (f.trail) scene.remove(f.trail); }); fxBullets = [];
+  fxBubbles.forEach(f => scene.remove(f.mesh)); fxBubbles = [];
   fxLabels.forEach(l => scene.remove(l.sp)); fxLabels = [];
   revealDecals.forEach(d => scene.remove(d)); revealDecals = [];
   zoomFocus = null;
@@ -1328,6 +1586,7 @@ socket.on('roundResult', data => {
   if (me) selfAlive = me.alive;
   if (selfMesh) { scene.remove(selfMesh); selfMesh = null; }
   if (selfLaser) { scene.remove(selfLaser); selfLaser = null; }
+  clearAimSkillFx();
   clearRevealMeshes();
   clearSpectatorMeshes();
 
@@ -1338,7 +1597,7 @@ socket.on('roundResult', data => {
 
   data.players.forEach(p => {
     const size = p.size || 1;
-    const mesh = makePlayerMesh(p.color, p.id === selfId, p.hat, p.back);
+    const mesh = makePlayerMesh(p.color, p.id === selfId, p.hat, p.back, p.body);
     mesh.position.set(p.x, 0, p.z);
     mesh.rotation.y = p.angle;
     mesh.scale.setScalar(size);
@@ -1447,6 +1706,9 @@ function handlePowerEvents(s) {
   if (shooter && s.activeUsed) {
     focusOn(shooter, 1600);
     floatLabel(shooter.x, shooter.z, 2.5 * shooter.size, SKILL_LABEL[s.activeUsed] || s.activeUsed, '#e7d6ff');
+    if (s.activeUsed === 'shotgun') spawnShotgunConeAt(shooter);
+    if (s.activeUsed === 'sniper') spawnSniperLineAt(shooter);
+    if (s.activeUsed === 'shield') spawnShieldBubble(shooter);
   }
   if (shooter && s.counter) {
     focusOn(shooter, 1500);
@@ -1457,6 +1719,7 @@ function handlePowerEvents(s) {
     if (!e) return;
     focusOn(e, 2200);
     e.dodgeUntil = revealClock + 1400;
+    spawnDodgeAfterimage(e);
     floatLabel(e.x, e.z, 2.6 * e.size, '💨 DODGE!', '#9fe0ff');
   });
   (s.foresightDodges || []).forEach(id => {
@@ -1464,6 +1727,7 @@ function handlePowerEvents(s) {
     if (!e) return;
     focusOn(e, 2200);
     e.dodgeUntil = revealClock + 1400;
+    spawnDodgeAfterimage(e, 0xd9c5ff);
     floatLabel(e.x, e.z, 2.6 * e.size, '👁️ FORESIGHT!', '#d9c5ff');
   });
   (s.shieldBlocks || []).forEach(b => {
@@ -1471,6 +1735,7 @@ function handlePowerEvents(s) {
     if (!e) return;
     focusOn(e, 2200);
     spawnFlash(e.x, 1.1, e.z, 1.5, 0x9fd3ff, 0.5);
+    spawnShieldBubble(e);
     floatLabel(e.x, e.z, 2.6 * e.size, '🛡️ SHIELD!', '#bfe6ff');
   });
   (s.secondChance || []).forEach(sc => {

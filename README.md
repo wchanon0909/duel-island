@@ -62,3 +62,21 @@ Open `http://localhost:3000`.
 - เมื่อผู้เล่นได้รับ Active Skill จะมีประกาศกลางจอ
 - เมื่อผู้เล่นกดใช้ Active Skill จะมีประกาศกลางจอให้ผู้เล่นทุกคนเห็น
 - Animation การ roll ลำดับยิงถูกปรับให้เริ่มหมุนเร็ว แล้วค่อย ๆ ช้าลงก่อนหยุดที่ลำดับจริง
+
+## Cosmetic and character update
+
+This version also adds the first cosmetic pass:
+
+- Character Customization area in the lobby before starting the game.
+- New chibi-style 3D character model with clearer face direction and body details.
+- Player color picker.
+- Body skin picker: Islander, Robot, Ninja, Wizard, Chicken.
+- Hat picker and back decoration picker remain available.
+- Skill visuals added:
+  - Bullet trail on fired bullets.
+  - Shield bubble / shield block effect.
+  - Dodge afterimage effect.
+  - Shotgun cone preview while aiming after activating Shotgun.
+  - Sniper line preview while aiming after activating Sniper.
+
+Cosmetics do not change hitbox or gameplay balance.

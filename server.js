@@ -25,6 +25,7 @@ const SHOTGUN_RANGE = 3;
 
 const HAT_IDS = ['none', 'party', 'tophat', 'halo', 'horns', 'bunny', 'crown', 'propeller', 'chef'];
 const BACK_IDS = ['none', 'devilwing', 'chickenwing', 'angelwing', 'jetpack', 'cape', 'balloon'];
+const BODY_IDS = ['islander', 'robot', 'ninja', 'wizard', 'chicken'];
 
 const SHOT_START_DELAY = 4200;
 const SHOT_INTERVAL = 1300;
@@ -164,6 +165,7 @@ class Room {
       isBot: !!p.isBot,
       hat: p.hat,
       back: p.back,
+      body: p.body,
       passiveSkill: revealSkills ? p.passiveSkill : null,
       activeSkill: revealSkills ? p.activeSkill : null
     }));
@@ -185,6 +187,7 @@ class Room {
       alive: true, ready: false, isBot: true,
       hat: HAT_IDS[1 + Math.floor(Math.random() * (HAT_IDS.length - 1))],
       back: BACK_IDS[1 + Math.floor(Math.random() * (BACK_IDS.length - 1))],
+      body: BODY_IDS[Math.floor(Math.random() * BODY_IDS.length)],
       passiveSkill: null,
       activeSkill: null
     });
@@ -219,6 +222,9 @@ class Room {
         id: p.id,
         name: p.name,
         color: p.color,
+        hat: p.hat,
+        back: p.back,
+        body: p.body,
         alive: p.alive,
         passiveSkill: revealSkills ? p.passiveSkill : null,
         activeSkill: revealSkills ? p.activeSkill : null,
@@ -272,7 +278,7 @@ class Room {
       }
     }
     io.to(this.code).emit('passiveReveal', {
-      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, passiveSkill: p.passiveSkill }))
+      players: [...this.players.values()].map(p => ({ id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back, body: p.body, passiveSkill: p.passiveSkill }))
     });
     this.addEvent('เปิดเผย Passive Skill ของทุกคนแล้ว', 'skill');
     this.startRound();
@@ -398,6 +404,9 @@ class Room {
       id: p.id,
       name: p.name,
       color: p.color,
+      hat: p.hat,
+      back: p.back,
+      body: p.body,
       passiveSkill: this.isSkillMode() ? p.passiveSkill : null,
       activeSkill: this.isSkillMode() ? p.activeSkill : null,
       moveLocked: !!p.moveLocked,
@@ -424,7 +433,7 @@ class Room {
     io.to(this.spectatorRoom).emit('spectateSnapshot', {
       round: this.round,
       players: [...this.players.values()].filter(p => p.alive).map(p => ({
-        id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back,
+        id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back, body: p.body,
         x: p.x, z: p.z, angle: p.angle
       }))
     });
@@ -674,7 +683,7 @@ class Room {
       players: [...this.players.values()]
         .filter(p => alive.includes(p) || eliminated.includes(p.id))
         .map(p => ({
-          id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back,
+          id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back, body: p.body,
           x: p.x, z: p.z, angle: p.angle,
           alive: p.alive,
           wasHit: eliminated.includes(p.id),
@@ -690,7 +699,7 @@ class Room {
       survivors: this.aliveIds(),
       angelGrant,
       skillState: skillMode ? [...this.players.values()].map(p => ({
-        id: p.id, name: p.name, color: p.color, alive: p.alive,
+        id: p.id, name: p.name, color: p.color, hat: p.hat, back: p.back, body: p.body, alive: p.alive,
         passiveSkill: p.passiveSkill,
         activeSkill: p.activeSkill,
         moveLocked: !!p.moveLocked
@@ -778,6 +787,7 @@ io.on('connection', socket => {
       ready: false,
       hat: 'none',
       back: 'none',
+      body: 'islander',
       passiveSkill: null,
       activeSkill: null
     });
@@ -822,6 +832,26 @@ io.on('connection', socket => {
     const p = room.players.get(socket.id);
     if (!p || !BACK_IDS.includes(back)) return;
     p.back = back;
+    room.broadcastRoom();
+  });
+
+
+
+  socket.on('setBody', ({ body }) => {
+    const room = rooms.get(currentRoomCode);
+    if (!room || room.state !== 'lobby') return;
+    const p = room.players.get(socket.id);
+    if (!p || !BODY_IDS.includes(body)) return;
+    p.body = body;
+    room.broadcastRoom();
+  });
+
+  socket.on('setColor', ({ color }) => {
+    const room = rooms.get(currentRoomCode);
+    if (!room || room.state !== 'lobby') return;
+    const p = room.players.get(socket.id);
+    if (!p || !COLORS.includes(color)) return;
+    p.color = color;
     room.broadcastRoom();
   });
 
