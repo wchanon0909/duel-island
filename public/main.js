@@ -549,7 +549,62 @@ let fxSprites = [], fxBeams = [], fxParticles = [], revealDecals = [], fxBullets
 
 // hidden-power icons + a short label that floats up above a player when a power fires
 const POWER_EMOJI = { matrix: '🕶️', drunken: '🥴', revenger: '👻', fool: '🤡', man: '💪' };
+const POWER_DESC = {
+  matrix: 'The Matrix — หลบกระสุนนัดแรกของเกม',
+  drunken: 'The Drunken — 33% ยิงออกด้านหลัง',
+  revenger: 'The Revenger — ตายแล้วยิงสุ่ม 1 นัด',
+  fool: 'The Fool — ยิงโดนใครปิดพลังคนนั้น',
+  man: 'The MAN — โดนยิงด้านหลังกระเด็นสุ่ม'
+};
 let zoomFocus = null; // { x, z, until } — pulls the reveal camera in on a triggered power
+let playerInfo = new Map(); // id -> { name, color }
+let revealedPowers = new Map(); // id -> powerId, kept on the left panel until the match ends
+
+// a hidden power just showed itself — remember it for the persistent left panel
+function revealPower(id, powerId) {
+  if (!powerId || powerId === 'none') return;
+  if (revealedPowers.get(id) === powerId) return;
+  revealedPowers.set(id, powerId);
+  renderPowerLog();
+}
+
+function renderPowerLog() {
+  const el = $('powerLog');
+  if (!el) return;
+  if (revealedPowers.size === 0) { el.classList.add('hidden'); return; }
+  let html = '<div class="logTitle">⚡ พลังแฝงที่เปิดแล้ว</div>';
+  revealedPowers.forEach((pw, id) => {
+    const info = playerInfo.get(id) || { name: '?', color: '#888' };
+    html += `<div class="logRow"><span class="orderDot" style="background:${info.color}"></span>
+      <span class="logName">${escapeHtml(info.name)}</span></div>
+      <div class="logDesc">${POWER_EMOJI[pw] || ''} ${POWER_DESC[pw] || ''}</div>`;
+  });
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+// which cards were played ON each player this round (left panel, reset every round)
+function buildCardLog(data) {
+  const el = $('cardLog');
+  if (!el) return;
+  const byTarget = new Map();
+  (data.cards || []).forEach(c => {
+    if (!byTarget.has(c.targetId)) byTarget.set(c.targetId, []);
+    byTarget.get(c.targetId).push(c.card);
+  });
+  if (byTarget.size === 0) { el.classList.add('hidden'); return; }
+  let html = '<div class="logTitle">🃏 การ์ดที่โดนใส่รอบนี้</div>';
+  data.players.forEach(p => {
+    const list = byTarget.get(p.id);
+    if (!list || !list.length) return;
+    const emojis = list.map(cid => (cardById(cid) || {}).emoji || '').join(' ');
+    html += `<div class="logRow"><span class="orderDot" style="background:${p.color}"></span>
+      <span class="logName">${escapeHtml(p.name)}</span>
+      <span class="logCards">${emojis}</span></div>`;
+  });
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
 
 function floatLabel(x, z, y, text, color) {
   const cvs = document.createElement('canvas');
@@ -566,7 +621,7 @@ function floatLabel(x, z, y, text, color) {
   sp.scale.set(4.2, 0.8, 1);
   sp.position.set(x, y, z);
   scene.add(sp);
-  fxLabels.push({ sp, life: 0, duration: 1.7, baseY: y });
+  fxLabels.push({ sp, life: 0, duration: 2.9, baseY: y });
 }
 
 function spawnMuzzleFlash(entry) {
@@ -780,14 +835,14 @@ function updateSpectate(dt) {
   tEl.classList.toggle('warn', secs <= 6);
 }
 
-window.addEventListener('keydown', e => setKey(e.key, true));
-window.addEventListener('keyup', e => setKey(e.key, false));
-function setKey(k, val) {
-  const key = k.toLowerCase();
-  if (key === 'w' || key === 'arrowup') keys.w = val;
-  if (key === 's' || key === 'arrowdown') keys.s = val;
-  if (key === 'a' || key === 'arrowleft') keys.a = val;
-  if (key === 'd' || key === 'arrowright') keys.d = val;
+window.addEventListener('keydown', e => setKey(e.code, true));
+window.addEventListener('keyup', e => setKey(e.code, false));
+// use physical key codes so movement works on any keyboard layout (Thai, etc.)
+function setKey(code, val) {
+  if (code === 'KeyW' || code === 'ArrowUp') keys.w = val;
+  if (code === 'KeyS' || code === 'ArrowDown') keys.s = val;
+  if (code === 'KeyA' || code === 'ArrowLeft') keys.a = val;
+  if (code === 'KeyD' || code === 'ArrowRight') keys.d = val;
 }
 
 let selfReady = false;
@@ -860,6 +915,9 @@ socket.on('roundStart', data => {
   // fresh card for the round; roster used for the target picker
   roster = data.roster || [];
   myCardTarget = null;
+  roster.forEach(pl => playerInfo.set(pl.id, { name: pl.name, color: pl.color }));
+  $('cardLog').classList.add('hidden'); // per-round card list only shows during the reveal
+  if (data.round === 1) { revealedPowers.clear(); renderPowerLog(); } // new match -> clear power log
 
   if (spectating) {
     // dead players don't pick cards — keep the side panel hidden during placement
@@ -1128,6 +1186,10 @@ socket.on('roundResult', data => {
   clearRevealMeshes();
   clearSpectatorMeshes();
 
+  data.players.forEach(p => playerInfo.set(p.id, { name: p.name, color: p.color }));
+  buildCardLog(data);       // which cards were played on whom this round (left)
+  renderPowerLog();         // keep the revealed-powers list up to date (left)
+
   data.players.forEach(p => {
     const size = p.size || 1;
     const mesh = makePlayerMesh(p.color, p.id === selfId, p.hat, p.back);
@@ -1228,31 +1290,35 @@ function focusOn(entry, ms) {
 function handlePowerEvents(s) {
   if (s.drunken) {
     const e = revealMeshMap.get(s.shooterId);
-    if (e) { focusOn(e, 1400); floatLabel(e.x, e.z, 2.5 * e.size, POWER_EMOJI.drunken + ' เมา!', '#ffd36b'); }
+    if (e) { focusOn(e, 2500); floatLabel(e.x, e.z, 2.5 * e.size, POWER_EMOJI.drunken + ' เมา!', '#ffd36b'); revealPower(s.shooterId, 'drunken'); }
   }
   if (s.revenge) {
     const e = revealMeshMap.get(s.shooterId);
-    if (e) { focusOn(e, 1500); floatLabel(e.x, e.z, 2.3, POWER_EMOJI.revenger + ' REVENGE!', '#c9b3ff'); }
+    if (e) { focusOn(e, 2600); floatLabel(e.x, e.z, 2.3, POWER_EMOJI.revenger + ' REVENGE!', '#c9b3ff'); revealPower(s.shooterId, 'revenger'); }
   }
   (s.dodges || []).forEach(id => {
     const e = revealMeshMap.get(id);
     if (!e) return;
-    focusOn(e, 1500);
-    e.dodgeUntil = revealClock + 800;
+    focusOn(e, 2600);
+    e.dodgeUntil = revealClock + 1400;
     floatLabel(e.x, e.z, 2.6 * e.size, POWER_EMOJI.matrix + ' MATRIX!', '#9fe0ff');
+    revealPower(id, 'matrix');
   });
   (s.manDeflects || []).forEach(id => {
     const e = revealMeshMap.get(id);
     if (!e) return;
-    focusOn(e, 1400);
+    focusOn(e, 2500);
     floatLabel(e.x, e.z, 2.6 * e.size, POWER_EMOJI.man + ' THE MAN!', '#ffcf7a');
+    revealPower(id, 'man');
   });
   (s.foolGags || []).forEach(g => {
     const e = revealMeshMap.get(g.victimId);
     if (!e) return;
-    focusOn(e, 1600);
+    focusOn(e, 2800);
     floatLabel(e.x, e.z, 2.6 * e.size, (POWER_EMOJI[g.fakedPower] || '❓') + ' ?!', '#ffffff');
-    setTimeout(() => floatLabel(e.x, e.z, 2.9 * e.size, '🤡👋 โดนหลอก!', '#ff8fd0'), 500);
+    setTimeout(() => floatLabel(e.x, e.z, 2.9 * e.size, '🤡👋 โดนหลอก!', '#ff8fd0'), 700);
+    revealPower(s.shooterId, 'fool');       // the shooter is The Fool
+    revealPower(g.victimId, g.fakedPower);  // the victim's real (suppressed) power is now known
   });
 }
 
