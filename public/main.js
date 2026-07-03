@@ -459,6 +459,8 @@ function updatePreviewTransform() {
 
 function updateAvatarPreview() {
   initModelPreview();
+  previewAngle = 0;
+  previewAutoSpin = true;
   if (!previewScene) return;
   if (previewRoot) {
     previewScene.remove(previewRoot);

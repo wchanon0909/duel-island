@@ -923,3 +923,92 @@ button.secondary:active { box-shadow: 0 2px 0 #d9902a; }
 @media (max-width: 760px) {
   .bodyPicker.heroGrid { grid-template-columns: repeat(2, minmax(130px, 1fr)) !important; }
 }
+
+
+/* Preview / hero selection polish v4 */
+.previewSpinNote { display: none !important; }
+.heroSelectionLayout {
+  grid-template-columns: minmax(280px, 34%) minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+.heroPreviewColumn {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) auto !important;
+  align-items: stretch !important;
+  justify-items: stretch !important;
+  gap: 6px !important;
+}
+.avatarPreview.standeePreview {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 300px !important;
+  max-height: none !important;
+  margin: 0 !important;
+  display: block !important;
+}
+.previewStage,
+#previewCanvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.previewBase {
+  width: min(150px, 56%) !important;
+  height: 22px !important;
+  bottom: 12px !important;
+}
+.selectedHeroTitle {
+  margin: 2px 0 0 !important;
+  text-align: center !important;
+  align-self: center !important;
+}
+.heroGridColumn {
+  height: 100% !important;
+  min-height: 0 !important;
+  display: grid !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
+  gap: 8px !important;
+}
+.bodyPicker.heroGrid {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  grid-template-rows: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+  align-content: stretch !important;
+  align-items: stretch !important;
+  padding: 0 !important;
+}
+.bodyBtn.heroCard {
+  height: 100% !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  margin: 0 !important;
+  display: grid !important;
+  grid-template-columns: 42px minmax(0, 1fr) !important;
+  align-items: center !important;
+  justify-items: start !important;
+}
+.bodyBtn.heroCard .heroName {
+  white-space: normal !important;
+  word-break: keep-all !important;
+  overflow: visible !important;
+}
+@media (max-height: 760px) {
+  .avatarPreview.standeePreview { min-height: 300px !important; }
+  .bodyBtn.heroCard { height: 100% !important; padding: 7px 9px !important; }
+}
+@media (max-width: 760px) {
+  .heroSelectionLayout {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: minmax(280px, 42%) minmax(0, 1fr) !important;
+  }
+  .avatarPreview.standeePreview { min-height: 260px !important; }
+  .bodyPicker.heroGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
