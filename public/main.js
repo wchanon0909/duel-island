@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+import { OBJLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/OBJLoader.js';
 
 // ---------- Socket & UI plumbing ----------
 const socket = io();
@@ -11,12 +12,17 @@ let currentRound = 1;
 
 // ---------- Character customization ----------
 const BODY_SKINS = [
-  { id: 'islander', label: '🌴 Islander 3D', tag: 'ISL', name: 'Islander' },
-  { id: 'robot', label: '🤖 Robot', tag: 'BOT', name: 'Robot' },
-  { id: 'ninja', label: '🥷 Ninja 3D', tag: 'NIN', name: 'Ninja' },
-  { id: 'wizard', label: '🧙 Wizard', tag: 'WIZ', name: 'Wizard' },
-  { id: 'chicken', label: '🐔 Chicken', tag: 'CHK', name: 'Chicken' }
+  { id: 'islander', label: '🌴 Islander', tag: 'ISL', name: 'Islander' },
+  { id: 'islander-girl', label: '🏖️ Beach Girl', tag: 'BG', name: 'Beach Girl' },
+  { id: 'ninja', label: '🥷 Ninja', tag: 'NIN', name: 'Ninja' },
+  { id: 'princess', label: '👑 Princess', tag: 'PRI', name: 'Princess' },
+  { id: 'pirate', label: '🏴‍☠️ Pirate', tag: 'PIR', name: 'Pirate' },
+  { id: 'suitguy', label: '👔 Baby Boss', tag: 'BOSS', name: 'Baby Boss' },
+  { id: 'dino', label: '🦖 Dino', tag: 'DINO', name: 'Dino' },
+  { id: 'armedguy', label: '🕵️ Armed Guy', tag: 'AG', name: 'Armed Guy' }
 ];
+const HERO_BY_ID = id => BODY_SKINS.find(h => h.id === id) || BODY_SKINS[0];
+
 const PLAYER_COLORS = [
   '#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6',
   '#e67e22', '#1abc9c', '#ff6fa3', '#95a5a6', '#34495e'
@@ -24,13 +30,31 @@ const PLAYER_COLORS = [
 let selfBody = 'islander';
 let selfColor = '#3498db';
 
-// Uploaded AI-generated GLB models. These replace the old standee art when available.
-// Keep the gameplay hitbox unchanged; the GLB is visual-only.
-const MODEL_SKIN_PATHS = {
-  islander: 'assets/models/islander.glb',
-  ninja: 'assets/models/ninja.glb'
+// Uploaded AI-generated models. Visual-only; gameplay hitbox remains unchanged.
+const MODEL_SKIN_SOURCES = {
+  islander: { type: 'glb', path: 'assets/models/islander.glb' },
+  'islander-girl': { type: 'glb', path: 'assets/models/islander-girl.glb' },
+  ninja: { type: 'glb', path: 'assets/models/ninja.glb' },
+  princess: { type: 'glb', path: 'assets/models/princess.glb' },
+  pirate: { type: 'glb', path: 'assets/models/pirate.glb' },
+  suitguy: { type: 'glb', path: 'assets/models/suitguy.glb' },
+  dino: { type: 'glb', path: 'assets/models/dino.glb' },
+  armedguy: {
+    type: 'obj',
+    path: 'assets/models/armedguy/base.obj',
+    diffuse: 'assets/models/armedguy/texture_diffuse.png',
+    normal: 'assets/models/armedguy/texture_normal.png',
+    roughness: 'assets/models/armedguy/texture_roughness.png',
+    metalness: 'assets/models/armedguy/texture_metallic.png'
+  }
 };
+const CHARACTER_TARGET_HEIGHT = 1.46;
+const CHARACTER_FOOT_Y = 0.16;
+// Hyper3D exports in this set face -Z. Game aim direction is +Z, so rotate models by 180 deg.
+const CHARACTER_FRONT_ROTATION_Y = Math.PI;
 const modelLoader = new GLTFLoader();
+const objLoader = new OBJLoader();
+const textureLoader = new THREE.TextureLoader();
 const modelPromiseCache = new Map();
 
 // ---------- Hats ----------
@@ -136,14 +160,20 @@ function updateBackPickerUI() {
 const bodyPickerEl = $('bodyPicker');
 BODY_SKINS.forEach(b => {
   const btn = document.createElement('button');
-  btn.className = 'bodyBtn';
-  btn.textContent = b.label;
+  btn.className = 'bodyBtn heroCard';
   btn.title = b.name;
+  btn.innerHTML = `
+    <span class="heroIcon">${b.label.split(' ')[0]}</span>
+    <span class="heroName">${escapeHtml(b.name)}</span>
+    <span class="heroTag">${escapeHtml(b.tag)}</span>`;
   btn.addEventListener('click', () => socket.emit('setBody', { body: b.id }));
   bodyPickerEl.appendChild(btn);
 });
 function updateBodyPickerUI() {
   [...bodyPickerEl.children].forEach((btn, i) => btn.classList.toggle('active', BODY_SKINS[i].id === selfBody));
+  const hero = HERO_BY_ID(selfBody);
+  const title = $('selectedHeroTitle');
+  if (title) title.textContent = hero.name;
   updateAvatarPreview();
 }
 
@@ -438,8 +468,8 @@ function updateAvatarPreview() {
     });
   }
   previewRoot = makePlayerMesh(selfColor, true, selfHat, selfBack, selfBody);
-  previewRoot.scale.setScalar(1.36);
-  previewRoot.position.set(0, -0.52, 0);
+  previewRoot.scale.setScalar(1.42);
+  previewRoot.position.set(0, -0.44, 0);
   previewScene.add(previewRoot);
   const base = $('previewBase');
   if (base) base.style.background = `linear-gradient(180deg, ${shadeHex(selfColor, 20)}, ${selfColor})`;
@@ -555,13 +585,11 @@ socket.on('roomUpdate', data => {
         myPassiveSkill = p.passiveSkill || null;
         myActiveSkill = p.activeSkill || null;
       }
-      const hatEmoji = (HATS.find(h => h.id === p.hat) || HATS[0]).emoji;
-      const backEmoji = (BACKS.find(b => b.id === p.back) || BACKS[0]).emoji;
-      const bodySkin = BODY_SKINS.find(b => b.id === p.body) || BODY_SKINS[0];
+      const bodySkin = HERO_BY_ID(p.body);
       const li = document.createElement('li');
       const label = document.createElement('span');
       label.innerHTML = `<span class="dot" style="background:${p.color}"></span>
-        <span>${p.isBot ? '🤖 ' : ''}<b>${bodySkin.tag || bodySkin.name}</b> ${p.hat && p.hat !== 'none' ? hatEmoji + ' ' : ''}${p.back && p.back !== 'none' ? backEmoji + ' ' : ''}${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
+        <span>${p.isBot ? '🤖 ' : ''}<b>${escapeHtml(bodySkin.name)}</b> — ${escapeHtml(p.name)}${p.id === data.hostId ? ' 👑' : ''}${p.id === selfId ? ' (คุณ)' : ''}</span>`;
       label.style.display = 'flex';
       label.style.alignItems = 'center';
       label.style.gap = '10px';
@@ -1031,12 +1059,36 @@ function addChibiFace(group, body) {
 
 
 function loadBodyModel(body) {
-  const path = MODEL_SKIN_PATHS[body];
-  if (!path) return null;
+  const source = MODEL_SKIN_SOURCES[body];
+  if (!source) return null;
   if (!modelPromiseCache.has(body)) {
     modelPromiseCache.set(body, new Promise((resolve, reject) => {
-      modelLoader.load(path, gltf => resolve(gltf.scene), undefined, err => {
-        console.warn('Failed to load character model', body, err);
+      if (source.type === 'obj') {
+        objLoader.load(source.path, obj => {
+          const diffuse = source.diffuse ? textureLoader.load(source.diffuse) : null;
+          const normal = source.normal ? textureLoader.load(source.normal) : null;
+          const roughness = source.roughness ? textureLoader.load(source.roughness) : null;
+          const metalness = source.metalness ? textureLoader.load(source.metalness) : null;
+          obj.traverse(child => {
+            if (!child.isMesh) return;
+            child.material = new THREE.MeshStandardMaterial({
+              map: diffuse,
+              normalMap: normal,
+              roughnessMap: roughness,
+              metalnessMap: metalness,
+              roughness: 0.82,
+              metalness: 0.05
+            });
+          });
+          resolve(obj);
+        }, undefined, err => {
+          console.warn('Failed to load OBJ character model', body, err);
+          reject(err);
+        });
+        return;
+      }
+      modelLoader.load(source.path, gltf => resolve(gltf.scene), undefined, err => {
+        console.warn('Failed to load GLB character model', body, err);
         reject(err);
       });
     }));
@@ -1044,18 +1096,22 @@ function loadBodyModel(body) {
   return modelPromiseCache.get(body);
 }
 
-function cloneAndFitModel(source, targetHeight = 1.38) {
+function cloneAndFitModel(source, targetHeight = CHARACTER_TARGET_HEIGHT) {
   const model = source.clone(true);
-  // Most GLB character tools export with -Z as the visual front. The game uses +Z as forward.
-  // Rotate the model so the gun/front side points in the same direction as the aiming arrow.
-  model.rotation.y = Math.PI;
+  model.rotation.y = CHARACTER_FRONT_ROTATION_Y;
   model.traverse(obj => {
     if (obj.isMesh) {
       obj.castShadow = true;
       obj.receiveShadow = true;
       if (obj.material) {
-        obj.material = obj.material.clone();
-        obj.material.roughness = Math.min(1, obj.material.roughness ?? 0.75);
+        obj.material = Array.isArray(obj.material)
+          ? obj.material.map(m => m.clone())
+          : obj.material.clone();
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach(m => {
+          if ('roughness' in m) m.roughness = Math.min(1, m.roughness ?? 0.75);
+          if ('metalness' in m) m.metalness = Math.min(0.25, m.metalness ?? 0.05);
+        });
       }
     }
   });
@@ -1073,19 +1129,19 @@ function cloneAndFitModel(source, targetHeight = 1.38) {
   box.getCenter(center);
   model.position.x -= center.x;
   model.position.z -= center.z;
-  model.position.y += -box.min.y + 0.13;
+  // Put the lowest point just above the colored foot ring so legs do not sink into the ground.
+  model.position.y += CHARACTER_FOOT_Y - box.min.y;
   return wrapper;
 }
 
 // Preload the uploaded models so they appear quickly when the lobby/game opens.
-Object.keys(MODEL_SKIN_PATHS).forEach(id => loadBodyModel(id));
+Object.keys(MODEL_SKIN_SOURCES).forEach(id => loadBodyModel(id));
 
 function makePlayerMesh(color, isSelf, hat, back, body = 'islander') {
   const group = new THREE.Group();
   const baseColor = new THREE.Color(color);
 
-  // 2.5D standee: a hand-drawn sprite on a small board-game base.
-  // It reads cleaner than geometry characters and keeps the gameplay hitbox unchanged.
+  // AI 3D model on a colored player ring. Visual-only; gameplay hitbox stays fixed.
   const baseMat = new THREE.MeshStandardMaterial({ color: baseColor, roughness: 0.6, metalness: 0.05 });
   const base = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.48, 0.11, 36), baseMat);
   base.position.y = 0.055;
@@ -1095,7 +1151,7 @@ function makePlayerMesh(color, isSelf, hat, back, body = 'islander') {
 
   const edge = new THREE.Mesh(
     new THREE.TorusGeometry(0.43, 0.035, 8, 36),
-    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 })
+    new THREE.MeshBasicMaterial({ color: baseColor, transparent: true, opacity: 0.85 })
   );
   edge.position.y = 0.12;
   edge.rotation.x = Math.PI / 2;
@@ -1125,7 +1181,7 @@ function makePlayerMesh(color, isSelf, hat, back, body = 'islander') {
   if (modelPromise) {
     modelPromise.then(source => {
       if (group.userData.body !== body) return;
-      const modelWrapper = cloneAndFitModel(source, 1.36);
+      const modelWrapper = cloneAndFitModel(source, CHARACTER_TARGET_HEIGHT);
       modelWrapper.userData.modelSkin = body;
       group.add(modelWrapper);
       group.userData.modelWrapper = modelWrapper;
@@ -1147,16 +1203,14 @@ function makePlayerMesh(color, isSelf, hat, back, body = 'islander') {
   arrow.position.set(0, 0.15, 0.52);
   group.add(arrow);
 
-  if (isSelf) {
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.52, 0.63, 32),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.62 })
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.018;
-    group.add(ring);
-    group.userData.ring = ring;
-  }
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(isSelf ? 0.55 : 0.50, isSelf ? 0.67 : 0.62, 40),
+    new THREE.MeshBasicMaterial({ color: baseColor, side: THREE.DoubleSide, transparent: true, opacity: isSelf ? 0.82 : 0.66 })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.022;
+  group.add(ring);
+  group.userData.ring = ring;
   return group;
 }
 

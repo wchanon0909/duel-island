@@ -25,7 +25,7 @@ const SHOTGUN_RANGE = 3;
 
 const HAT_IDS = ['none', 'party', 'tophat', 'halo', 'horns', 'bunny', 'crown', 'propeller', 'chef'];
 const BACK_IDS = ['none', 'devilwing', 'chickenwing', 'angelwing', 'jetpack', 'cape', 'balloon'];
-const BODY_IDS = ['islander', 'robot', 'ninja', 'wizard', 'chicken'];
+const BODY_IDS = ['islander', 'islander-girl', 'ninja', 'princess', 'pirate', 'suitguy', 'dino', 'armedguy'];
 
 const SHOT_START_DELAY = 4200;
 const SHOT_INTERVAL = 1300;
@@ -185,8 +185,8 @@ class Room {
     this.players.set(id, {
       id, name, color, x: 0, z: 0, angle: 0,
       alive: true, ready: false, isBot: true,
-      hat: HAT_IDS[1 + Math.floor(Math.random() * (HAT_IDS.length - 1))],
-      back: BACK_IDS[1 + Math.floor(Math.random() * (BACK_IDS.length - 1))],
+      hat: 'none',
+      back: 'none',
       body: BODY_IDS[Math.floor(Math.random() * BODY_IDS.length)],
       passiveSkill: null,
       activeSkill: null

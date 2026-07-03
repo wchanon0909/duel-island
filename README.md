@@ -1,110 +1,36 @@
 # Duel Island
 
-เกม 3 มิติมุมสูง ให้ผู้เล่นแอบเดินหาจุดยืน+ทิศทางบนเกาะ แล้วยิงพร้อมกันตอนหมดเวลา เกาะจะเล็กลงทุกรอบจนเหลือผู้รอดคนเดียว
+เวอร์ชันนี้ปรับระบบตัวละครเป็น Hero Selection + AI 3D Models ตามแผนล่าสุด
 
-## รันบนเครื่องตัวเอง
-
-```
-npm install
-npm start
-```
-
-เปิด `http://localhost:3000`
-
-## Deploy ขึ้น Render (ฟรี)
-
-1. Push โปรเจกต์นี้ขึ้น GitHub repo
-2. เข้า https://render.com สมัคร/ล็อกอินด้วยบัญชี GitHub
-3. New > Blueprint > เลือก repo นี้ (จะอ่านค่าใน `render.yaml` ให้อัตโนมัติ) หรือเลือก New > Web Service แล้วตั้งค่าเอง:
-   - Build Command: `npm install`
-   - Start Command: `npm start`
-4. รอ deploy เสร็จ จะได้ URL แบบ `https://duel-island-xxxx.onrender.com` ส่งให้เพื่อนเข้าเล่นได้ทันที
-
-> หมายเหตุ: free tier ของ Render จะ sleep เมื่อไม่มีคนใช้งาน ทำให้การเปิดครั้งแรกช้าประมาณ 30-60 วินาที
-
-## Skill System V2 Roadmap Update
-
-This version adds two game modes:
-
-- Classic mode: basic movement, aiming, and shooting only. Skill logic and skill UI are disabled.
-- Skill mode: passive selection before Round 1, active skills from Angel Blessing, skill table, tooltip descriptions, animations, and event log.
-
-### Passive skills
-
-- Bounce Bullet: normal bullets bounce once from walls/objects. Bullets do not bounce from players.
-- Dodge: automatically dodges one incoming bullet once per match.
-- Second Chance: when hit, the player retreats 3 spaces backward. If this falls outside the island, the player dies. If the player has not fired yet this round, they counter-fire in their current aimed direction.
-
-### Active skills
-
-- Shotgun: cone shot with maximum 3-space range.
-- Sniper: long straight precision shot. Dodge and Shield can still protect against it.
-- Taser: if it hits, the target cannot move next round but can still turn, shoot, or use skills.
-- Foresight: the player skips shooting this round and dodges incoming fire for the round.
-- Shield: when used, blocks one bullet in the current round.
-
-### Local run
+## Run local
 
 ```bash
 npm install
 npm start
 ```
 
-Open `http://localhost:3000`.
+เปิด `http://localhost:3000`
 
+## Update ล่าสุด
 
-## Skill System V2 update - Active Skill reward mechanic
+- ปรับ Lobby เป็นหน้า Hero Selection แบบกริด เลือกตัวละครแล้วมีกรอบ Active
+- เอาฟังก์ชันแต่งสี/หมวก/ของหลังออกจาก UI ชั่วคราว
+- ล็อก Layout ของ Lobby ไม่ให้ปุ่ม Start Game หลุดจอ เมื่อเพิ่มบอทหลายตัว
+- ใช้ตัวละครเฉพาะชุดที่ผู้ใช้กำหนดไว้เท่านั้น:
+  - islander
+  - islander-girl
+  - ninja
+  - princess
+  - pirate
+  - suitguy
+  - dino
+  - armedguy
+- โหลด AI 3D models จาก `public/assets/models/`
+- ปรับสเกลโมเดลให้สูงใกล้กัน และยกเท้าให้อยู่เหนือพื้น/วงแหวน
+- คง hitbox เดิมไว้ ไม่ให้ตัวละครแต่ละแบบได้เปรียบเสียเปรียบ
+- เพิ่มวงแหวน/ฐานสีตาม player color เพื่อแยกผู้เล่น แม้เลือกตัวละครซ้ำกัน
+- ตั้งค่าโมเดลให้หันปืนไปทางเดียวกับทิศยิงของเกม โดยใช้ +Z เป็น forward direction
 
-- ผู้เล่นถือ Active Skill ได้สูงสุด 1 สกิลเท่านั้น
-- หลังจบรอบ Angel Blessing จะเริ่มตรวจจากผู้เล่นที่เข้าเงื่อนไขท้ายลำดับยิงเดิม
-- ถ้าผู้เล่นคนนั้นมี Active Skill อยู่แล้ว ระบบจะเลื่อนสิทธิ์ขึ้นไปยังผู้เล่นลำดับก่อนหน้า
-- ถ้าไม่มีผู้เล่นที่มีสิทธิ์และยังไม่มี Active Skill ระบบจะไม่แจกสกิลในรอบนั้น
-- เมื่อผู้เล่นได้รับ Active Skill จะมีประกาศกลางจอ
-- เมื่อผู้เล่นกดใช้ Active Skill จะมีประกาศกลางจอให้ผู้เล่นทุกคนเห็น
-- Animation การ roll ลำดับยิงถูกปรับให้เริ่มหมุนเร็ว แล้วค่อย ๆ ช้าลงก่อนหยุดที่ลำดับจริง
+## Notes
 
-## Cosmetic and character update
-
-This version also adds the first cosmetic pass:
-
-- Character Customization area in the lobby before starting the game.
-- New chibi-style 3D character model with clearer face direction and body details.
-- Player color picker.
-- Body skin picker: Islander, Robot, Ninja, Wizard, Chicken.
-- Hat picker and back decoration picker remain available.
-- Skill visuals added:
-  - Bullet trail on fired bullets.
-  - Shield bubble / shield block effect.
-  - Dodge afterimage effect.
-  - Shotgun cone preview while aiming after activating Shotgun.
-  - Sniper line preview while aiming after activating Sniper.
-
-Cosmetics do not change hitbox or gameplay balance.
-
-## Standee character update
-
-This version upgrades characters from geometry-based chibi models to 2.5D standee/sprite characters:
-
-- Five hand-drawn standee styles are generated in-game: Islander, Robot, Ninja, Wizard, and Chicken.
-- Player color is used on the character accent and the base.
-- Hats and back decorations are drawn into the standee texture.
-- The in-game character is placed on a small colored board-game base with a front direction pointer.
-- The lobby customization screen now has a larger character preview window.
-- The preview can auto-spin, be rotated left/right with buttons, or be dragged horizontally with the mouse/touch.
-- Hitbox and gameplay balance remain unchanged; all cosmetics are visual only.
-
-## AI GLB character model update
-
-This version integrates uploaded AI-generated GLB character models:
-
-- `public/assets/models/islander.glb`
-- `public/assets/models/ninja.glb`
-
-The Islander and Ninja body skins now load real 3D GLB models in the game scene and in the lobby character preview. Robot, Wizard, and Chicken still use the generated standee fallback until real GLB models are provided.
-
-Important notes:
-
-- GLB models are visual-only and do not change hitbox or gameplay balance.
-- The colored player base and front direction arrow remain visible for gameplay readability.
-- The lobby preview is now rendered with a Three.js 3D preview canvas, so it can rotate the actual model.
-- If a GLB fails to load, the old standee placeholder is kept as fallback.
+`armedguy` ใช้ OBJ + texture เพราะไฟล์ที่ได้รับมาไม่มี GLB ส่วนตัวอื่นใช้ GLB แบบ shaded เพื่อให้เบากว่า PBR และเหมาะกับเว็บเกมมากขึ้น
